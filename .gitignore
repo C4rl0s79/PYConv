@@ -3,56 +3,43 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-dist/
+*.egg
 *.egg-info/
+dist/
+build/
 .eggs/
 
 # Virtual environments
-venv/
 .venv/
+venv/
 env/
-.env/
-
-# Distribution / packaging
-*.egg
-*.whl
-
-# PyInstaller
-*.spec
-dist/
-build/
-
-# Pytest
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Mypy
-.mypy_cache/
-
-# Ruff
-.ruff_cache/
+.env
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.sublime-project
 *.sublime-workspace
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Project-specific
+# Project runtime
 conver_session.json
 *.part
 *_converting_tmp*
 test_vmaf_*.json
-logs/
-*.log
 
 # Credentials
 .converv_creds
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# mypy
+.mypy_cache/
+
+# ruff / black
+.ruff_cache/

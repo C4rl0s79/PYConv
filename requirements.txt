@@ -1,8 +1,14 @@
 # PYConv – runtime dependencies
-# All stdlib; no third-party packages required at runtime.
-# ffmpeg and ffprobe must be installed separately and available in PATH.
+# Python 3.10+
 
-# ── Dev / tooling ────────────────────────────────────────────────────────────
-black>=24.0
-ruff>=0.4.0
-mypy>=1.9
+# GUI – tkinter is part of stdlib (no pip install needed)
+# ffmpeg and ffprobe must be installed separately and available in PATH
+
+# No third-party Python packages required for core functionality.
+# All dependencies (tkinter, threading, subprocess, pathlib, dataclasses,
+# enum, json, hashlib, base64, socket, http.client, urllib) are stdlib.
+
+# === Optional developer tools ===
+# black          – code formatter
+# ruff           – linter
+# mypy           – static type checker

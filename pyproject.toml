@@ -5,10 +5,9 @@ build-backend = "setuptools.backends.legacy:build"
 [project]
 name = "pyconv"
 version = "4.12.0"
-description = "Modular GPU video transcoding pipeline with Copyparty HTTP upload"
+description = "Modular GPU video transcoding pipeline with Copyparty integration"
 requires-python = ">=3.10"
-readme = "README.md"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
 [tool.black]
 line-length = 100
@@ -16,15 +15,16 @@ target-version = ["py310", "py311", "py312"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+select = ["E", "F", "W", "I", "UP", "B", "C4", "PIE", "RET"]
+ignore = ["E501"]
 
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
-ignore = ["E501", "B008"]
+[tool.ruff.isort]
+known-first-party = ["pyconv"]
 
 [tool.mypy]
 python_version = "3.10"
-strict = false
 warn_return_any = true
-warn_unused_configs = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+check_untyped_defs = true
 ignore_missing_imports = true
