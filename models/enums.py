@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Shared enumerations for PYConv pipeline."""
+"""Enumerations used across the PYConv pipeline."""
 from enum import Enum, auto
 
 
@@ -17,10 +16,11 @@ class JobStatus(Enum):
 
 
 class GPUType(Enum):
-    NVIDIA = "nvenc"
-    INTEL = "qsv"
-    AMD = "amf"
+    NVIDIA = "nvidia"
+    INTEL = "intel"
+    AMD = "amd"
     CPU = "cpu"
+    UNKNOWN = "unknown"
 
 
 class EncoderType(Enum):
@@ -36,8 +36,8 @@ class EncoderType(Enum):
 
     @classmethod
     def from_label(cls, label: str) -> "EncoderType":
-        """Parse display label like 'av1_nvenc (NVIDIA AV1)' → EncoderType."""
-        key = label.split()[0]
+        """Parse from GUI display label like 'av1_nvenc (NVIDIA AV1)'."""
+        key = label.split()[0].lower()
         for member in cls:
             if member.value == key:
                 return member
@@ -47,20 +47,22 @@ class EncoderType(Enum):
 class UploadStatus(Enum):
     PENDING = auto()
     IN_PROGRESS = auto()
-    SUCCESS = auto()
+    DONE = auto()
     FAILED = auto()
-    VERIFIED = auto()
+    STALLED = auto()
+    CANCELLED = auto()
 
 
 class ProbeStatus(Enum):
     OK = auto()
     ERROR = auto()
     TIMEOUT = auto()
+    UNSUPPORTED = auto()
 
 
 class RepairMode(Enum):
     NONE = auto()
-    ANNEXB = auto()       # Annex B → AVCC remux
-    FOURCC_MKV = auto()  # AVI bad FOURCC → remux to MKV
-    FOURCC_DEC = auto()  # force mpeg4 decoder
-    FOURCC_H264 = auto() # lossless H.264 transcode as intermediary
+    ANNEXB = auto()        # Annex B → AVCC remux
+    FOURCC = auto()        # AVI bad FOURCC fix
+    FOURCC_FORCE = auto()  # Force mpeg4 decoder
+    FOURCC_LOSSLESS = auto()  # Lossless H.264 intermediate

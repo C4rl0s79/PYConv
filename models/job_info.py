@@ -1,46 +1,49 @@
-# -*- coding: utf-8 -*-
-"""EncodeJob dataclass – represents a single file in the pipeline."""
+"""EncodeJob dataclass – describes a single file to be processed."""
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
 from .enums import JobStatus
+from .media_info import MediaInfo
 
 
 @dataclass
 class EncodeJob:
-    """All parameters needed to process one file through the pipeline."""
+    """One unit of work in the pipeline (one source file)."""
+    # Identity
+    index: int = 0
+    source_path: str = ""       # local path OR copyparty URL
+    source_url: str = ""        # copyparty URL (network mode)
+    dir_url: str = ""           # copyparty directory URL
+    filename: str = ""
 
-    # Identification
-    job_id: int
-    source_path: str           # local path or URL
-    dest_dir_url: str          # destination dir URL (copyparty) or local dir
-    filename: str              # original filename
+    # Media info (filled after probe)
+    media_info: MediaInfo | None = None
 
-    # Encoding parameters
-    encoder: str               # e.g. 'av1_nvenc'
-    cq: int = 0                # CQ / GQ value (0 = auto)
-    gpu_label: str = "GPU1"    # 'GPU1' or 'GPU2'
+    # Encode settings
+    encoder: str = "av1_nvenc"
+    cq: int = 32
+    gpu_label: str = "GPU1"     # "GPU1" | "GPU2"
     gpu_index: int = 0
 
     # Pipeline flags
-    is_network: bool = False
-    use_copyparty: bool = False
+    selected: bool = True
+    skip_hdr: bool = False
+    skip_av1: bool = False
+    skip_hevc: bool = False
     keep_orig: bool = False
     test_mode: bool = False
     hq_mode: bool = False
     vmaf_enabled: bool = False
     vmaf_target: float = 93.0
-    min_save_pct: int = 5
-    auto_cq: bool = True
+    min_save_pct: int = 10
     anime_mode: bool = False
-    qsv_profile: str = "quality"
 
     # Runtime state
     status: JobStatus = JobStatus.PENDING
-    error_msg: str = ""
     savings_pct: float = 0.0
-    vmaf_score: float = -1.0
+    error_msg: str = ""
+    output_path: str = ""       # local temp output path
+    output_size: int = 0
 
-    # Paths populated during execution
-    local_src: str = ""        # local temp file (after download)
-    local_out: str = ""        # encoded output temp file
-    cp_password: str = ""
+    @property
+    def display_name(self) -> str:
+        return self.filename or Path(self.source_path).name

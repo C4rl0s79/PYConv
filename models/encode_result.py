@@ -1,52 +1,50 @@
-# -*- coding: utf-8 -*-
-"""EncodeResult and UploadResult dataclasses."""
-from dataclasses import dataclass
+"""EncodeResult, UploadResult, GPUInfo dataclasses."""
+from dataclasses import dataclass, field
 from .enums import UploadStatus
 
 
 @dataclass
 class EncodeResult:
     """Result of a single ffmpeg encode pass."""
-
-    success: bool
+    success: bool = False
     output_path: str = ""
+    output_size: int = 0
+    source_size: int = 0
+    savings_pct: float = 0.0
     encoder_used: str = ""
     cq_used: int = 0
-    vmaf: float = -1.0
-    savings_pct: float = 0.0
-    duration_s: float = 0.0
-    stderr_tail: str = ""
+    vmaf_score: float = -1.0
     error_msg: str = ""
-    used_fallback: bool = False
-    repair_mode: str = "none"
+    stderr_tail: str = ""       # last N lines of ffmpeg stderr for diagnostics
+
+    @property
+    def size_ratio(self) -> float:
+        if self.source_size > 0:
+            return self.output_size / self.source_size
+        return 1.0
 
 
 @dataclass
 class UploadResult:
-    """Result of a single upload attempt."""
-
-    status: UploadStatus
-    remote_path: str = ""
-    local_size: int = 0
+    """Result of a Copyparty upload."""
+    status: UploadStatus = UploadStatus.PENDING
     remote_size: int = 0
+    local_size: int = 0
+    verified: bool = False
     error_msg: str = ""
+    dest_url: str = ""
 
     @property
-    def size_verified(self) -> bool:
-        return (
-            self.status == UploadStatus.VERIFIED
-            and self.local_size > 0
-            and self.local_size == self.remote_size
-        )
+    def ok(self) -> bool:
+        return self.status == UploadStatus.DONE and self.verified
 
 
 @dataclass
 class GPUInfo:
-    """GPU device descriptor."""
-
-    index: int
-    label: str            # 'GPU1' / 'GPU2'
-    encoder: str          # e.g. 'av1_nvenc'
-    cq: int
-    enabled: bool = True
-    download_lock_id: int = 0  # unique per-GPU download lock id
+    """Describes a single GPU worker slot."""
+    index: int = 0
+    label: str = "GPU1"
+    encoder: str = "av1_nvenc"
+    cq: int = 32
+    download_lock_id: int = 0   # id() of the per-GPU download threading.Lock
+    active: bool = True
