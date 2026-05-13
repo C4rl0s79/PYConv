@@ -1,35 +1,26 @@
-# -*- coding: utf-8 -*-
-"""Simple wall-clock timer utilities."""
-from __future__ import annotations
+"""Timing utilities."""
 import time
+from typing import Callable
+
+
+def format_duration(seconds: float) -> str:
+    """Format seconds as H:MM:SS or M:SS."""
+    s = max(0, int(seconds))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{sec:02d}"
+    return f"{m}:{sec:02d}"
 
 
 class Stopwatch:
-    """Context-manager and manual wall-clock timer."""
+    """Simple elapsed-time tracker."""
 
     def __init__(self) -> None:
-        self._start: float = 0.0
-        self._end: float = 0.0
-
-    def start(self) -> "Stopwatch":
         self._start = time.monotonic()
-        return self
 
-    def stop(self) -> float:
-        self._end = time.monotonic()
-        return self.elapsed
-
-    @property
     def elapsed(self) -> float:
-        """Elapsed seconds (from start to stop, or now if still running)."""
-        end = self._end if self._end else time.monotonic()
-        return max(end - self._start, 0.0)
+        return time.monotonic() - self._start
 
-    def __enter__(self) -> "Stopwatch":
-        return self.start()
-
-    def __exit__(self, *_) -> None:
-        self.stop()
-
-    def __repr__(self) -> str:
-        return f"Stopwatch({self.elapsed:.2f}s)"
+    def reset(self) -> None:
+        self._start = time.monotonic()

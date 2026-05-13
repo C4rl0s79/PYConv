@@ -1,43 +1,36 @@
-# -*- coding: utf-8 -*-
-"""
-Subprocess helpers – wrappers around subprocess.run / subprocess.Popen
-for running ffmpeg and ffprobe.
-
-All platform-specific handling (Windows CREATE_NO_WINDOW) is centralised here.
-"""
-from __future__ import annotations
-import sys
+"""Subprocess helpers – run_cmd (subprocess.run wrapper) and safe_decode."""
 import subprocess
-from typing import Callable, Iterator
+import sys
+from typing import Optional
 
-# Hide console windows on Windows when spawning child processes.
+# Suppress console windows on Windows when spawning ffmpeg/ffprobe.
 _NO_WINDOW: int = 0
 if sys.platform == "win32":
     _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
 
-def _creation_flags(extra: int = 0) -> int:
-    return _NO_WINDOW | extra
+def safe_decode(raw: bytes) -> str:
+    """Decode bytes trying UTF-8 first, then fallback codepages."""
+    for enc in ("utf-8", "cp1250", "cp852", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
 
 
 def run_cmd(
     args: list[str],
-    timeout: int | None = None,
+    timeout: Optional[float] = None,
     **kwargs,
 ) -> tuple[str, str, int]:
-    """
-    Run a command and capture stdout/stderr.
+    """Run a subprocess and return (stdout, stderr, returncode).
 
-    Returns (stdout_str, stderr_str, returncode).
-    returncode is negative for internal errors:
-      -1  timeout
-      -2  executable not found
-      -3  OS error
+    - Hides console windows on Windows.
+    - Returns (-1) on timeout, (-2) on FileNotFoundError, (-3) on OSError.
     """
-    from utils.filename import safe_decode  # local import to avoid circular
-
     if _NO_WINDOW and "creationflags" not in kwargs:
-        kwargs["creationflags"] = _creation_flags()
+        kwargs["creationflags"] = _NO_WINDOW
     try:
         result = subprocess.run(
             args,
@@ -46,60 +39,29 @@ def run_cmd(
             timeout=timeout,
             **kwargs,
         )
-    except subprocess.TimeoutExpired as exc:
-        return safe_decode(exc.stdout or b""), safe_decode(exc.stderr or b""), -1
+    except subprocess.TimeoutExpired as e:
+        return safe_decode(e.stdout or b""), safe_decode(e.stderr or b""), -1
     except FileNotFoundError:
         return "", f"executable not found: {args[0] if args else '?'}", -2
-    except OSError as exc:
-        return "", str(exc), -3
+    except OSError as e:
+        return "", str(e), -3
     return safe_decode(result.stdout), safe_decode(result.stderr), result.returncode
 
 
-def popen_stderr_lines(
+def open_popen(
     args: list[str],
-    cancel_check: Callable[[], bool] | None = None,
     **kwargs,
-) -> Iterator[str]:
-    """
-    Launch a process and yield stderr line-by-line (UTF-8 decoded).
+) -> subprocess.Popen:
+    """Open a Popen process with hidden console on Windows.
 
-    Use this for long-running ffmpeg encodes where live progress
-    logging is needed and blocking on a large stderr blob must be avoided.
-
-    Yields decoded lines (stripped).  Caller is responsible for reading
-    stdout if needed – this helper routes stdout to DEVNULL.
-
-    The process is terminated if cancel_check() returns True.
+    Use this instead of subprocess.Popen directly for ffmpeg encode calls
+    so that stderr can be read line-by-line for live logging.
     """
     if _NO_WINDOW and "creationflags" not in kwargs:
-        kwargs["creationflags"] = _creation_flags()
-
-    proc = subprocess.Popen(
+        kwargs["creationflags"] = _NO_WINDOW
+    return subprocess.Popen(
         args,
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         **kwargs,
     )
-    try:
-        for raw_line in proc.stderr:  # type: ignore[union-attr]
-            if cancel_check and cancel_check():
-                proc.terminate()
-                proc.wait(timeout=5)
-                return
-            line = raw_line.decode("utf-8", errors="replace").rstrip()
-            if line:
-                yield line
-    finally:
-        proc.wait()
-
-
-def kill_process(proc: subprocess.Popen) -> None:  # type: ignore[type-arg]
-    """Terminate a Popen process gracefully, then kill after 3 s."""
-    try:
-        proc.terminate()
-        proc.wait(timeout=3)
-    except Exception:
-        try:
-            proc.kill()
-        except Exception:
-            pass
