@@ -1,59 +1,48 @@
-# -*- coding: utf-8 -*-
-"""Project-wide constants."""
+"""Compile-time constants: colour palette, file extensions, thresholds."""
 from pathlib import Path
 
-# ── File handling ────────────────────────────────────────────────────────────
-SUPPORTED_EXTS: frozenset[str] = frozenset(
-    {".mkv", ".avi", ".mp4", ".mov", ".ts", ".m2ts", ".wmv", ".flv", ".mpg", ".mpeg"}
-)
+# ── Colour palette ────────────────────────────────────────────────────────────
+DARK_BG = "#0e1117"
+PANEL_BG = "#161b22"
+BORDER = "#30363d"
+ACCENT = "#00d4aa"
+ACCENT2 = "#f0b429"
+TEXT_PRI = "#e6edf3"
+TEXT_SEC = "#8b949e"
+TEXT_MUTED = "#484f58"
+RED = "#ff6b6b"
+GREEN = "#3fb950"
+YELLOW = "#d29922"
+BLUE = "#388bfd"
+HDR_COLOR = "#bf8700"
+SKIP_COLOR = "#8b949e"
+DONE_COLOR = "#3fb950"
+ERROR_COLOR = "#ff6b6b"
 
-TMP_SUFFIX = "_converting_tmp"
+# ── Media ──────────────────────────────────────────────────────────────────────
+SUPPORTED_EXTS: frozenset[str] = frozenset({
+    ".mkv", ".avi", ".mp4", ".mov", ".ts", ".m2ts",
+    ".wmv", ".flv", ".mpg", ".mpeg",
+})
 
-# ── Disk space thresholds (GB) ───────────────────────────────────────────────
-SAFE_FREE_GB: float = 150.0
-WARN_FREE_GB: float = 80.0
+ENCODER_OPTIONS: list[str] = [
+    "av1_nvenc (NVIDIA AV1)",
+    "hevc_nvenc (NVIDIA H.265)",
+    "av1_qsv (Intel Arc AV1)",
+    "hevc_qsv (Intel H.265)",
+    "av1_amf (AMD AV1)",
+    "hevc_amf (AMD H.265)",
+    "libx265 (CPU H.265 – wolny)",
+    "libaom-av1 (CPU AV1 – bardzo wolny)",
+]
 
-# ── HDR detection metadata values ───────────────────────────────────────────
+# ── HDR detection ─────────────────────────────────────────────────────────────
 HDR_TRANSFERS: frozenset[str] = frozenset({"smpte2084", "arib-std-b67", "smpte428"})
 HDR_PRIMARIES: frozenset[str] = frozenset({"bt2020"})
 
-# ── Network / HTTP ───────────────────────────────────────────────────────────
-DOWNLOAD_CHUNK_BYTES: int = 4 * 1024 * 1024   # 4 MB
-UPLOAD_CHUNK_BYTES: int = 4 * 1024 * 1024     # 4 MB
-STALL_TIMEOUT_S: int = 120                     # seconds without progress → abort
-SOCKET_TIMEOUT_S: int = 30                     # per-read socket timeout
-CONNECT_TIMEOUT_S: int = 60                    # urllib connect timeout
+# ── Storage thresholds (GB) ───────────────────────────────────────────────────
+SAFE_FREE_GB: int = 150
+WARN_FREE_GB: int = 80
 
-# ── ffprobe / ffmpeg timeouts (seconds) ─────────────────────────────────────
-PROBE_TIMEOUT_S: int = 15
-CUT_TIMEOUT_S: int = 60
-PROBE_ENCODE_TIMEOUT_S: int = 180
-
-# ── VMAF ─────────────────────────────────────────────────────────────────────
-VMAF_SAMPLE_SECS: int = 30
-VMAF_BINARY_SEARCH_ITERS: int = 8
-
-# ── Source codec BPP normalisation factors ───────────────────────────────────
-# Efficiency of each codec relative to H.264 @ same perceptual quality.
-# H.264 baseline = 1.00; higher value means codec is more efficient
-# (same perceived quality at lower bitrate → "equivalent" bitrate is higher).
-SRC_CODEC_FACTOR: dict[str, float] = {
-    "h264": 1.00, "avc": 1.00, "mpeg4": 0.85,
-    "mpeg2video": 0.55, "mpeg1video": 0.45,
-    "vc1": 0.95, "wmv3": 0.85, "vp8": 1.00,
-    "hevc": 1.65, "h265": 1.65, "vp9": 1.55,
-    "av1": 2.00,
-}
-
-# ── Session file ─────────────────────────────────────────────────────────────
-SESSION_FILE: Path = Path(__file__).parent.parent / "conver_session.json"
-
-# ── Credentials file ─────────────────────────────────────────────────────────
-CREDS_FILE: Path = Path.home() / ".converv_creds"
-
-# ── HTTP User-Agent ──────────────────────────────────────────────────────────
-HTTP_USER_AGENT: str = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0"
-)
+# ── Temp file suffix ──────────────────────────────────────────────────────────
+TMP_SUFFIX: str = "_converting_tmp"
