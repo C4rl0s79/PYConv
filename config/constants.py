@@ -1,48 +1,32 @@
-"""Compile-time constants: colour palette, file extensions, thresholds."""
-from pathlib import Path
+"""constants.py — stałe globalne projektu."""
+from __future__ import annotations
 
-# ── Colour palette ────────────────────────────────────────────────────────────
-DARK_BG = "#0e1117"
-PANEL_BG = "#161b22"
-BORDER = "#30363d"
-ACCENT = "#00d4aa"
-ACCENT2 = "#f0b429"
-TEXT_PRI = "#e6edf3"
-TEXT_SEC = "#8b949e"
-TEXT_MUTED = "#484f58"
-RED = "#ff6b6b"
-GREEN = "#3fb950"
-YELLOW = "#d29922"
-BLUE = "#388bfd"
-HDR_COLOR = "#bf8700"
-SKIP_COLOR = "#8b949e"
-DONE_COLOR = "#3fb950"
-ERROR_COLOR = "#ff6b6b"
+# Wersja
+APP_VERSION = "4.12"
+APP_TITLE   = f"Plex Convert GUI v{APP_VERSION}"
 
-# ── Media ──────────────────────────────────────────────────────────────────────
-SUPPORTED_EXTS: frozenset[str] = frozenset({
-    ".mkv", ".avi", ".mp4", ".mov", ".ts", ".m2ts",
-    ".wmv", ".flv", ".mpg", ".mpeg",
+# Progi wolnego miejsca na dysku (GB)
+SAFE_FREE_GB: float = 20.0
+WARN_FREE_GB: float = 10.0
+
+# Dozwolone rozszerzenia wideo
+VIDEO_EXTENSIONS: frozenset[str] = frozenset({
+    ".mkv", ".avi", ".mp4", ".mov",
+    ".ts", ".m2ts", ".wmv", ".flv",
+    ".mpg", ".mpeg", ".webm", ".ogv",
 })
 
-ENCODER_OPTIONS: list[str] = [
-    "av1_nvenc (NVIDIA AV1)",
-    "hevc_nvenc (NVIDIA H.265)",
-    "av1_qsv (Intel Arc AV1)",
-    "hevc_qsv (Intel H.265)",
-    "av1_amf (AMD AV1)",
-    "hevc_amf (AMD H.265)",
-    "libx265 (CPU H.265 – wolny)",
-    "libaom-av1 (CPU AV1 – bardzo wolny)",
-]
+# Limit czasu pobierania / uploadowania (s)
+DOWNLOAD_TIMEOUT:  int = 3600
+UPLOAD_TIMEOUT:    int = 7200
+STALL_TIMEOUT:     int = 120
 
-# ── HDR detection ─────────────────────────────────────────────────────────────
-HDR_TRANSFERS: frozenset[str] = frozenset({"smpte2084", "arib-std-b67", "smpte428"})
-HDR_PRIMARIES: frozenset[str] = frozenset({"bt2020"})
+# Chunk upload
+UPLOAD_CHUNK_SIZE: int = 8 * 1024 * 1024   # 8 MB
 
-# ── Storage thresholds (GB) ───────────────────────────────────────────────────
-SAFE_FREE_GB: int = 150
-WARN_FREE_GB: int = 80
+# FFprobe / FFmpeg
+FFPROBE_TIMEOUT: int = 30
+FFMPEG_TIMEOUT:  int = 0    # 0 = bez limitu
 
-# ── Temp file suffix ──────────────────────────────────────────────────────────
-TMP_SUFFIX: str = "_converting_tmp"
+# Plik sesji
+SESSION_FILE = ".pyconv_session.json"

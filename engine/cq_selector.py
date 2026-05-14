@@ -6,20 +6,20 @@ Wyodrębniony z monolitu. Zachowane 1:1:
   - BPP normalizacja do H.264-ekwiwalentu
   - Stara ścieżka: ratio vs ref bitrate gdy brak fps/width
   - Tryb Anime: minimalny GQ
-  - complexityprobe: select=gt(scene\,0.3) 20s ze środka
+  - complexityprobe: select=gt(scene,0.3) 20s ze środka
   - vmaf_target_search: binary-search 30s sample, lo=cqstart-8, hi=cqstart+10
 """
 from __future__ import annotations
-import os
+
 from pathlib import Path
 from typing import Optional
 
-from ..utils.subprocess_utils import run_cmd
-from ..utils.logging_utils import get_logger
-from ..utils.filename import safe_filename
-from ..utils.hashing import rm_silent
 from ..models.enums import EncoderType
 from ..models.media_info import MediaInfo
+from ..utils.filename import safe_filename
+from ..utils.hashing import rm_silent
+from ..utils.logging_utils import get_logger
+from ..utils.subprocess_utils import run_cmd
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ class CQSelector:
 
     def __init__(
         self,
-        ffmpeg_engine=None,   # FFmpegEngine (dla vmaf_target_search)
+        ffmpeg_engine=None,
         qsv_profile: str = "balanced",
         anime_mode: bool = False,
         qsv_profiles: Optional[dict] = None,
@@ -88,7 +88,6 @@ class CQSelector:
     ) -> int:
         """autocq() z monolitu — 1:1 logika BPP + stara ścieżka ratio."""
         family = encoder.value
-        # QSV: użyj aktywnego profilu jeśli dostępny
         if family in ("av1qsv", "hevcqsv") and self.qsv_profile in self.qsv_profiles:
             table = self.qsv_profiles[self.qsv_profile].get(family, CQBASE[family])
         else:
@@ -104,7 +103,6 @@ class CQSelector:
         adjustment = 0
 
         if width > 0 and fps > 0.0:
-            # Nowa ścieżka: BPP normalizacja
             bpp_raw = (bitrate_kbps * 1000.0) / (width * height * fps) if bitrate_kbps > 0 else 0.0
             bpp_eq = bpp_raw * src_factor
             if bpp_eq > 0.20:
@@ -118,7 +116,6 @@ class CQSelector:
             elif bpp_eq > 0.0:
                 adjustment = 4
         elif bitrate_kbps > 0:
-            # Stara ścieżka: ratio vs ref bitrate
             ref_b = _REF_BITRATE[0]
             for h in sorted(_REF_BITRATE.keys(), reverse=True):
                 if height >= h:
@@ -141,7 +138,6 @@ class CQSelector:
         cq_max = CQMAX.get(family, 51)
         result = max(1, min(cq_max, base_cq + adjustment))
 
-        # Tryb Anime: podnieś minimalny GQ
         if self.anime_mode:
             anime_min = _ANIME_MIN.get(family, 0)
             if anime_min and result < anime_min:
@@ -150,10 +146,7 @@ class CQSelector:
         return result
 
     def complexity_probe(self, path: Path, duration: float, sample_secs: int = 20) -> float:
-        """complexityprobe() z monolitu: scene change rate (0.0–1.0).
-
-        Używa select=gt(scene\,0.3) na 20s ze środka pliku.
-        """
+        """complexityprobe() z monolitu: scene change rate (0.0–1.0)."""
         if duration < sample_secs * 1.5:
             ss, t = 0, max(5, int(duration * 0.5))
         else:
@@ -177,14 +170,14 @@ class CQSelector:
     def hq_cq_adjustment(complexity: float) -> int:
         """hqcqadjustment() z monolitu: mapuje complexity → korektę CQ."""
         if complexity > 0.8:
-            return -3   # bardzo dynamiczne: akcja, sport
+            return -3
         if complexity > 0.4:
-            return -2   # ruchliwe
+            return -2
         if complexity > 0.15:
-            return 0    # standard
+            return 0
         if complexity > 0.05:
-            return 1    # spokojne: rozmowy, dramat
-        return 2        # praktycznie statyczne: animacja, slideshow
+            return 1
+        return 2
 
     def vmaf_target_search(
         self,
@@ -197,11 +190,7 @@ class CQSelector:
         tmpdir: Optional[Path] = None,
         info: Optional[MediaInfo] = None,
     ) -> Optional[int]:
-        """vmaftargetsearch() z monolitu — binary-search CQ na 30s sample.
-
-        Zwraca dobrane CQ lub None gdy się nie udało.
-        Pliki sample zapisywane tylko do tmpdir (nigdy obok źródła).
-        """
+        """vmaftargetsearch() z monolitu — binary-search CQ na 30s sample."""
         if duration < 60:
             return None
         if not self.ffmpeg_engine:
@@ -216,7 +205,6 @@ class CQSelector:
         stem = safe_filename(src.stem, maxlen=40)
         sample_ref = tdir / f"vmafref_{job_id}_{stem}.mkv"
 
-        # Wytnij sample bez rekompresji
         cut_cmd = [
             "ffmpeg", "-y", "-v", "error",
             "-ss", str(ss), "-t", str(sample_secs),
@@ -253,8 +241,7 @@ class CQSelector:
             logger.info(f"[{job_id}] VMAF probe CQ={cq_val} → {v:.2f}")
             return v
 
-        # Binary-search: cel = target ±1.5 pkt
-        for _ in range(8):  # max 8 iteracji
+        for _ in range(8):
             mid = (lo + hi) // 2
             score = encode_and_score(mid)
             if score < 0:
@@ -267,9 +254,9 @@ class CQSelector:
             if diff <= 1.5:
                 break
             if score < target:
-                hi = mid - 1   # za niska jakość → niższe CQ
+                hi = mid - 1
             else:
-                lo = mid + 1   # za wysoka jakość → wyższe CQ
+                lo = mid + 1
 
         rm_silent(sample_ref)
         if best_cq is not None:

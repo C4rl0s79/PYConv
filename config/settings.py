@@ -1,60 +1,79 @@
-"""Session persistence: load/save user settings to conver_session.json."""
+"""settings.py — AppSettings dataclass z persist przez JSON."""
 from __future__ import annotations
-import sys
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from utils.json_utils import load_json, save_json
 
-_CFG_PATH = Path(__file__).parent.parent / "conver_session.json"
+from dataclasses import dataclass, field  # noqa: F401 (field używany pośrednio przez podklasy)
+from pathlib import Path
+from typing import Optional
+
+from .constants import SAFE_FREE_GB, SESSION_FILE, WARN_FREE_GB
 
 
 @dataclass
-class SessionSettings:
-    """All persisted GUI/pipeline settings."""
-    src_path: str = ""
-    mode: str = "folder"            # "folder" | "file"
-    is_network: bool = False
-    tmp_dir: str = "C:\\" if sys.platform == "win32" else "/tmp"
+class AppSettings:
+    """Wszystkie ustawienia aplikacji — odpowiednik cfg_* z monolitu."""
 
-    enc1: str = "av1_nvenc (NVIDIA AV1)"
-    enc2: str = "av1_qsv (Intel Arc AV1)"
-    gpu2_enabled: bool = False
+    # Źródło
+    src_path:    str  = ""
+    mode:        str  = "folder"     # "folder" | "file"
+    is_network:  bool = False
+    tmp_dir:     str  = "C:\\\\"
 
-    auto_cq: bool = True
-    cq1: int = 32
-    cq2: int = 28
-    min_save: int = 10
-    hq_mode: bool = False
-    vmaf_enabled: bool = False
+    # Enkodery
+    encoder1:    str  = "av1nvenc"
+    encoder2:    str  = "av1qsv"
+    gpu2_enabled:bool = False
+
+    # CQ
+    auto_cq:     bool = True
+    cq1:         int  = 32
+    cq2:         int  = 28
+    min_savings: int  = 10
+
+    # HQ
+    hq_mode:     bool  = False
+    vmaf_enabled:bool  = False
     vmaf_target: float = 93.0
-    qsv_profile: str = "quality"
-    anime_mode: bool = False
 
-    skip_hdr: bool = False
-    skip_av1: bool = False
-    skip_hevc: bool = False
-    keep_orig: bool = False
-    test_mode: bool = False
+    # QSV
+    qsv_profile: str  = "quality"
+    anime_mode:  bool = False
 
-    cp_use: bool = False
-    cp_url: str = "https://emucloud.org/filmy/"
-    cp_password: str = ""
-    cp_remember: bool = False
+    # Filtry
+    skip_hdr:    bool = True
+    skip_av1:    bool = True
+    skip_hevc:   bool = False
+    keep_orig:   bool = False
+    test_mode:   bool = False
 
+    # Copyparty
+    use_copyparty: bool = False
+    cp_src_url:    str  = ""
+    cp_remember:   bool = False
 
-def load_session(path: Path = _CFG_PATH) -> SessionSettings:
-    """Load session settings from JSON; fall back to defaults on any error."""
-    data = load_json(path, default={})
-    s = SessionSettings()
-    for f in s.__dataclass_fields__:
-        if f in data:
-            setattr(s, f, data[f])
-    return s
+    # Progi
+    safe_free_gb:  float = SAFE_FREE_GB
+    warn_free_gb:  float = WARN_FREE_GB
 
+    @classmethod
+    def load(cls, path: Optional[Path] = None) -> "AppSettings":
+        import json
+        p = path or Path(SESSION_FILE)
+        if not p.exists():
+            return cls()
+        try:
+            with p.open(encoding="utf-8") as f:
+                d = json.load(f)
+            obj = cls()
+            for k, v in d.items():
+                if hasattr(obj, k):
+                    setattr(obj, k, v)
+            return obj
+        except Exception:
+            return cls()
 
-def save_session(settings: SessionSettings, path: Path = _CFG_PATH) -> None:
-    """Persist session settings to JSON."""
-    data = asdict(settings)
-    if not settings.cp_remember:
-        data["cp_password"] = ""
-    save_json(path, data)
+    def save(self, path: Optional[Path] = None) -> None:
+        import json
+        import dataclasses
+        p = path or Path(SESSION_FILE)
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(dataclasses.asdict(self), f, indent=2, ensure_ascii=False)
