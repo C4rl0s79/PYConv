@@ -1,54 +1,53 @@
-"""Centralised logging setup for PYConv."""
+"""Centralny logger z RotatingFileHandler + GUI log buffer.
+
+Zastępuje print() w całym projekcie. Każdy moduł wołuje get_logger(__name__).
+"""
+from __future__ import annotations
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 
-_LOG_FORMAT = "%(asctime)s [%(levelname)-8s] %(name)s – %(message)s"
-_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+_LOG_DIR = Path("logs")
+_FORMATTER = logging.Formatter(
+    fmt="%(asctime)s [%(levelname)-5s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 
-def setup_rotating_logger(
-    name: str = "pyconv",
-    log_dir: str | None = None,
-    max_bytes: int = 5 * 1024 * 1024,
-    backup_count: int = 3,
+def setup_logger(
+    name: str,
+    log_dir: Path = _LOG_DIR,
     level: int = logging.DEBUG,
+    console: bool = True,
 ) -> logging.Logger:
-    """Create (or retrieve) a logger with rotating file handler + stderr handler."""
+    """Tworzy lub zwraca istniejący logger z rotating file + optional console."""
+    log_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(name)
     if logger.handlers:
-        return logger  # already configured
-
+        return logger
     logger.setLevel(level)
-    formatter = logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT)
+    logger.propagate = False
 
-    # Console handler
-    ch = logging.StreamHandler(sys.stderr)
-    ch.setLevel(logging.WARNING)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    fh = RotatingFileHandler(
+        log_dir / "pyconv.log",
+        maxBytes=50 * 1024 * 1024,  # 50 MB per plik
+        backupCount=10,
+        encoding="utf-8",
+    )
+    fh.setFormatter(_FORMATTER)
+    logger.addHandler(fh)
 
-    # Rotating file handler
-    if log_dir:
-        log_path = Path(log_dir) / f"{name}.log"
-        try:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            fh = RotatingFileHandler(
-                str(log_path),
-                maxBytes=max_bytes,
-                backupCount=backup_count,
-                encoding="utf-8",
-            )
-            fh.setLevel(logging.DEBUG)
-            fh.setFormatter(formatter)
-            logger.addHandler(fh)
-        except Exception as exc:
-            logger.warning("Could not create log file %s: %s", log_path, exc)
+    if console:
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setFormatter(_FORMATTER)
+        ch.setLevel(logging.INFO)
+        logger.addHandler(ch)
 
     return logger
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a child logger under the 'pyconv' hierarchy."""
-    return logging.getLogger(f"pyconv.{name}")
+    """Shortcut — setup_logger z domyślnymi parametrami."""
+    return setup_logger(name)

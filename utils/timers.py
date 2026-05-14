@@ -1,26 +1,25 @@
-"""Timing utilities."""
+"""Prosty timer kontekstowy do mierzenia czasu enkodu/uploadu."""
+from __future__ import annotations
 import time
-from typing import Callable
+from dataclasses import dataclass, field
 
 
-def format_duration(seconds: float) -> str:
-    """Format seconds as H:MM:SS or M:SS."""
-    s = max(0, int(seconds))
-    h, rem = divmod(s, 3600)
-    m, sec = divmod(rem, 60)
-    if h:
-        return f"{h}:{m:02d}:{sec:02d}"
-    return f"{m}:{sec:02d}"
+@dataclass
+class Timer:
+    """Context manager mierzący czas elapsed w sekundach."""
+    _start: float = field(default_factory=time.monotonic, init=False)
+    elapsed: float = 0.0
 
-
-class Stopwatch:
-    """Simple elapsed-time tracker."""
-
-    def __init__(self) -> None:
+    def __enter__(self) -> "Timer":
         self._start = time.monotonic()
+        return self
 
-    def elapsed(self) -> float:
-        return time.monotonic() - self._start
+    def __exit__(self, *_) -> None:
+        self.elapsed = time.monotonic() - self._start
 
-    def reset(self) -> None:
-        self._start = time.monotonic()
+    def __str__(self) -> str:
+        s = self.elapsed
+        if s < 60:
+            return f"{s:.1f}s"
+        m, s = divmod(int(s), 60)
+        return f"{m}m{s:02d}s"

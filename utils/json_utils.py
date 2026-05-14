@@ -1,27 +1,25 @@
-"""JSON load/save helpers with safe fallback."""
+"""JSON config helpers — cfgload() i cfgsave() z monolitu."""
+from __future__ import annotations
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 
-def load_json(path: str | Path, default: Any = None) -> Any:
-    """Load JSON from *path*, returning *default* on any error."""
+def cfg_load(path: Path) -> Dict[str, Any]:
+    """Wczytuje JSON config. Zwraca {} gdy plik nie istnieje lub błąd."""
     try:
-        p = Path(path)
-        if p.exists():
-            return json.loads(p.read_text(encoding="utf-8"))
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         pass
-    return default if default is not None else {}
+    return {}
 
 
-def save_json(path: str | Path, data: Any, indent: int = 2) -> bool:
-    """Save *data* as JSON to *path*. Returns True on success."""
+def cfg_save(path: Path, data: Dict[str, Any]) -> None:
+    """Zapisuje JSON config atomowo (przez .tmp)."""
+    tmp = path.with_suffix(".tmp")
     try:
-        Path(path).write_text(
-            json.dumps(data, indent=indent, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        return True
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
     except Exception:
-        return False
+        tmp.unlink(missing_ok=True)

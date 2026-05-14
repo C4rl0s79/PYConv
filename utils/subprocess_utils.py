@@ -1,67 +1,91 @@
-"""Subprocess helpers – run_cmd (subprocess.run wrapper) and safe_decode."""
+"""Subprocess helpers z Popen line-buffered stderr dla FFmpeg.
+
+Zastępuje subprocess.run() wszędzie tam gdzie FFmpeg generuje duże stderr/stdout.
+Kluczowe: bufsize=1 = line-buffered, zero ryzyka ogromnych stderr blobów.
+"""
+from __future__ import annotations
 import subprocess
 import sys
-from typing import Optional
+from contextlib import contextmanager
+from typing import Iterator, List, Optional, Tuple
 
-# Suppress console windows on Windows when spawning ffmpeg/ffprobe.
-_NO_WINDOW: int = 0
+# Windows: ukryj czarne okno konsoli
+NOWINDOW: int = 0
 if sys.platform == "win32":
-    _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    NOWINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
 
-def safe_decode(raw: bytes) -> str:
-    """Decode bytes trying UTF-8 first, then fallback codepages."""
-    for enc in ("utf-8", "cp1250", "cp852", "latin-1"):
-        try:
-            return raw.decode(enc)
-        except (UnicodeDecodeError, LookupError):
-            continue
-    return raw.decode("utf-8", errors="replace")
+@contextmanager
+def ffmpeg_popen(cmd: List[str], job_id: str = "") -> Iterator[subprocess.Popen]:
+    """Context manager: Popen z line-buffered stdout+stderr dla FFmpeg.
+
+    FFmpeg pisze progress na stdout (-progress pipe:1 -nostats),
+    logi/błędy na stderr. Łączymy oba przez stderr=STDOUT.
+    """
+    kwargs: dict = {
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "text": True,
+        "bufsize": 1,          # line-buffered — kluczowe dla live GUI
+        "universal_newlines": True,
+    }
+    if NOWINDOW:
+        kwargs["creationflags"] = NOWINDOW
+    proc = subprocess.Popen(cmd, **kwargs)
+    try:
+        yield proc
+    finally:
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+                proc.wait()
+
+
+def iter_ffmpeg_lines(proc: subprocess.Popen) -> Iterator[str]:
+    """Yields linie stderr z ffmpeg live — bez blokowania."""
+    if proc.stderr:
+        for raw in proc.stderr:
+            line = raw.strip()
+            if line:
+                yield line
 
 
 def run_cmd(
-    args: list[str],
-    timeout: Optional[float] = None,
+    args: List[str],
+    timeout: Optional[int] = None,
     **kwargs,
-) -> tuple[str, str, int]:
-    """Run a subprocess and return (stdout, stderr, returncode).
+) -> Tuple[str, str, int]:
+    """Zastępuje runcmd() z monolitu: (stdout, stderr, returncode).
 
-    - Hides console windows on Windows.
-    - Returns (-1) on timeout, (-2) on FileNotFoundError, (-3) on OSError.
+    Używać TYLKO dla krótkich komend (ffprobe, md5sum).
+    Dla długich encode'ów zawsze ffmpeg_popen().
     """
-    if _NO_WINDOW and "creationflags" not in kwargs:
-        kwargs["creationflags"] = _NO_WINDOW
+    extra: dict = {"capture_output": True, "text": True}
+    if timeout:
+        extra["timeout"] = timeout
+    if NOWINDOW:
+        extra["creationflags"] = NOWINDOW
+    extra.update(kwargs)
     try:
-        result = subprocess.run(
-            args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=timeout,
-            **kwargs,
-        )
+        r = subprocess.run(args, **extra)
+        return _safe_decode(r.stdout), _safe_decode(r.stderr), r.returncode
     except subprocess.TimeoutExpired as e:
-        return safe_decode(e.stdout or b""), safe_decode(e.stderr or b""), -1
+        return _safe_decode(e.stdout or b""), _safe_decode(e.stderr or b""), -1
     except FileNotFoundError:
-        return "", f"executable not found: {args[0] if args else '?'}", -2
+        return "", f"Executable not found: {args[0]}", -2
     except OSError as e:
         return "", str(e), -3
-    return safe_decode(result.stdout), safe_decode(result.stderr), result.returncode
 
 
-def open_popen(
-    args: list[str],
-    **kwargs,
-) -> subprocess.Popen:
-    """Open a Popen process with hidden console on Windows.
-
-    Use this instead of subprocess.Popen directly for ffmpeg encode calls
-    so that stderr can be read line-by-line for live logging.
-    """
-    if _NO_WINDOW and "creationflags" not in kwargs:
-        kwargs["creationflags"] = _NO_WINDOW
-    return subprocess.Popen(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **kwargs,
-    )
+def _safe_decode(raw) -> str:
+    if isinstance(raw, bytes):
+        for enc in ("utf-8", "cp1250", "cp852", "latin-1"):
+            try:
+                return raw.decode(enc)
+            except (UnicodeDecodeError, LookupError):
+                continue
+        return raw.decode("utf-8", errors="replace")
+    return raw or ""
