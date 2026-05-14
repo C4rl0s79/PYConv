@@ -1,49 +1,43 @@
-"""EncodeJob dataclass – describes a single file to be processed."""
+"""EncodeJob and EncodeResult dataclasses — replace queue tuple packing."""
+from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from .enums import JobStatus
-from .media_info import MediaInfo
+from typing import Optional
+from .enums import JobStatus, EncoderType
 
 
 @dataclass
 class EncodeJob:
-    """One unit of work in the pipeline (one source file)."""
-    # Identity
-    index: int = 0
-    source_path: str = ""       # local path OR copyparty URL
-    source_url: str = ""        # copyparty URL (network mode)
-    dir_url: str = ""           # copyparty directory URL
-    filename: str = ""
-
-    # Media info (filled after probe)
-    media_info: MediaInfo | None = None
-
-    # Encode settings
-    encoder: str = "av1_nvenc"
-    cq: int = 32
-    gpu_label: str = "GPU1"     # "GPU1" | "GPU2"
-    gpu_index: int = 0
-
-    # Pipeline flags
-    selected: bool = True
-    skip_hdr: bool = False
-    skip_av1: bool = False
-    skip_hevc: bool = False
-    keep_orig: bool = False
-    test_mode: bool = False
-    hq_mode: bool = False
-    vmaf_enabled: bool = False
-    vmaf_target: float = 93.0
-    min_save_pct: int = 10
-    anime_mode: bool = False
-
-    # Runtime state
+    """Represents a single video encode task through the pipeline."""
+    job_id: str
+    source_path: Path          # oryginalne źródło (sieć lub local)
+    temp_input: Path           # lokalny plik roboczy pobrany do tmp
+    temp_output: Path          # lokalny plik po enkodzie w tmp
+    dest_dir_url: str          # Copyparty destination directory URL
+    dest_filename: str         # docelowa nazwa pliku (stem + .mkv)
+    encoder: EncoderType
+    cq: int
+    source_size: int = 0
+    duration: float = 0.0
     status: JobStatus = JobStatus.PENDING
+    retry_count: int = 0
     savings_pct: float = 0.0
-    error_msg: str = ""
-    output_path: str = ""       # local temp output path
-    output_size: int = 0
+    vmaf_score: Optional[float] = None
+    used_encoder: Optional[EncoderType] = None  # po fallbacku
+    extra: dict = field(default_factory=dict)
 
     @property
-    def display_name(self) -> str:
-        return self.filename or Path(self.source_path).name
+    def dest_url(self) -> str:
+        return self.dest_dir_url.rstrip("/") + "/" + self.dest_filename
+
+
+@dataclass
+class EncodeResult:
+    """Outcome of a single encode attempt (single encoder + forceswdec)."""
+    success: bool
+    used_encoder: Optional[EncoderType] = None
+    output_size: int = 0
+    savings_pct: float = 0.0
+    vmaf_score: Optional[float] = None
+    error: Optional[str] = None
+    used_repair: Optional[str] = None  # annexb / fourcc wariant

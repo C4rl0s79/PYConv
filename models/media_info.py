@@ -1,57 +1,59 @@
-"""MediaInfo dataclass – raw ffprobe results for a single file."""
+"""MediaInfo and ProbeResult dataclasses — replace probefile() dict returns."""
+from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional, Dict, Any
+from .enums import ProbeStatus
 
 
 @dataclass
 class MediaInfo:
-    """Stores all media metadata extracted by ffprobe."""
-    path: str
-    size: int = 0
-    codec: str = "?"
+    """Parsed metadata for a single video file (from ffprobe JSON)."""
+    path: Path
+    size_bytes: int
+    duration_seconds: float
+    video_codec: str
     width: int = 0
     height: int = 0
-    pix_fmt: str = ""
-    duration: float = 0.0
     fps: float = 0.0
-    bit_depth: int = 8
     bitrate_kbps: float = 0.0
+    bitdepth: int = 8
     hdr: bool = False
+    pix_fmt: str = ""
+    audio_codec: str = ""
+    container: str = ""
+    complexity: float = 0.0  # scene change rate z complexityprobe()
+    extra: Dict[str, Any] = field(default_factory=dict)
 
-    # Human-friendly helpers
+    @property
+    def size_mb(self) -> float:
+        return self.size_bytes / 1024 / 1024
+
+    @property
+    def is_10bit(self) -> bool:
+        return self.bitdepth >= 10
+
     @property
     def resolution_label(self) -> str:
         if self.height >= 2160:
-            return "4K"
-        if self.height >= 1440:
+            return "2160p"
+        elif self.height >= 1440:
             return "1440p"
-        if self.height >= 1080:
+        elif self.height >= 1080:
             return "1080p"
-        if self.height >= 720:
+        elif self.height >= 720:
             return "720p"
-        return f"{self.height}p" if self.height else "?"
+        return f"{self.height}p"
+
+
+@dataclass
+class ProbeResult:
+    """Result of ffprobe execution — wraps MediaInfo or error."""
+    status: ProbeStatus
+    media_info: Optional[MediaInfo] = None
+    error: Optional[str] = None
+    raw: Optional[Dict[str, Any]] = None  # raw ffprobe JSON
 
     @property
-    def size_gb(self) -> float:
-        return self.size / (1024 ** 3)
-
-    @property
-    def filename(self) -> str:
-        return Path(self.path).name
-
-    @classmethod
-    def from_probe_dict(cls, d: dict) -> "MediaInfo":
-        """Construct from legacy probe_file() dict."""
-        return cls(
-            path=d.get("path", ""),
-            size=d.get("size", 0),
-            codec=d.get("codec", "?"),
-            width=d.get("width", 0),
-            height=d.get("height", 0),
-            pix_fmt=d.get("pix_fmt", ""),
-            duration=d.get("duration", 0.0),
-            fps=d.get("fps", 0.0),
-            bit_depth=d.get("bit_depth", 8),
-            bitrate_kbps=d.get("bitrate_kbps", 0.0),
-            hdr=d.get("hdr", False),
-        )
+    def ok(self) -> bool:
+        return self.status == ProbeStatus.OK and self.media_info is not None
