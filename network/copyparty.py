@@ -325,7 +325,6 @@ class CopypartyClient:
         """Auth headers — cookie cpp + cppwd fallback."""
         hdrs = {}
         if self.password:
-
             hdrs["Cookie"] = f"cppwd={self.password}"
             hdrs["PW"] = self.password  # fallback header z monolitu
         return hdrs

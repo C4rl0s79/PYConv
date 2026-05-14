@@ -9,6 +9,7 @@ Wyodrębniony z monolitu. Zachowane 1:1:
   - complexityprobe: select=gt(scene,0.3) 20s ze środka
   - vmaf_target_search: binary-search 30s sample, lo=cqstart-8, hi=cqstart+10
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -23,37 +24,53 @@ from ..utils.subprocess_utils import run_cmd
 logger = get_logger(__name__)
 
 CQBASE: dict[str, dict[int, int]] = {
-    "av1nvenc":   {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
-    "hevcnvenc":  {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "av1qsv":     {2160: 20, 1440: 18, 1080: 16, 720: 14, 0: 12},
-    "hevcqsv":    {2160: 25, 1440: 23, 1080: 21, 720: 19, 0: 18},
-    "av1amf":     {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "hevcamf":    {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
-    "libx265":    {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
-    "libsvtav1":  {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "av1nvenc": {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
+    "hevcnvenc": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "av1qsv": {2160: 20, 1440: 18, 1080: 16, 720: 14, 0: 12},
+    "hevcqsv": {2160: 25, 1440: 23, 1080: 21, 720: 19, 0: 18},
+    "av1amf": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "hevcamf": {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
+    "libx265": {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
+    "libsvtav1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
     "libaom-av1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
 }
 CQMAX: dict[str, int] = {
-    "av1nvenc": 51, "hevcnvenc": 51,
-    "av1qsv": 51,   "hevcqsv": 51,
-    "av1amf": 51,   "hevcamf": 51,
-    "libx265": 51,  "libaom-av1": 63, "libsvtav1": 63,
+    "av1nvenc": 51,
+    "hevcnvenc": 51,
+    "av1qsv": 51,
+    "hevcqsv": 51,
+    "av1amf": 51,
+    "hevcamf": 51,
+    "libx265": 51,
+    "libaom-av1": 63,
+    "libsvtav1": 63,
 }
 SRCCODEC_FACTOR: dict[str, float] = {
-    "h264": 1.00, "avc": 1.00, "mpeg4": 0.85,
-    "mpeg2video": 0.55, "mpeg1video": 0.45,
-    "vc1": 0.95,  "wmv3": 0.85,
-    "vp8": 1.00,  "vp9": 1.55,
-    "hevc": 1.65, "h265": 1.65,
+    "h264": 1.00,
+    "avc": 1.00,
+    "mpeg4": 0.85,
+    "mpeg2video": 0.55,
+    "mpeg1video": 0.45,
+    "vc1": 0.95,
+    "wmv3": 0.85,
+    "vp8": 1.00,
+    "vp9": 1.55,
+    "hevc": 1.65,
+    "h265": 1.65,
     "av1": 2.00,
 }
 _ANIME_MIN: dict[str, int] = {
-    "av1qsv": 14, "hevcqsv": 18,
-    "av1nvenc": 32, "hevcnvenc": 24,
+    "av1qsv": 14,
+    "hevcqsv": 18,
+    "av1nvenc": 32,
+    "hevcnvenc": 24,
 }
 _REF_BITRATE: dict[int, int] = {
-    2160: 12000, 1440: 6000,
-    1080: 3000,  720: 1500, 0: 600,
+    2160: 12000,
+    1440: 6000,
+    1080: 3000,
+    720: 1500,
+    0: 600,
 }
 
 
@@ -163,11 +180,22 @@ class CQSelector:
             t = sample_secs
 
         cmd = [
-            "ffmpeg", "-v", "error",
-            "-ss", str(ss), "-t", str(t),
-            "-i", str(path),
-            "-vf", r"select=gt(scene\,0.3),metadata=print:file=-",
-            "-an", "-sn", "-f", "null", "-",
+            "ffmpeg",
+            "-v",
+            "error",
+            "-ss",
+            str(ss),
+            "-t",
+            str(t),
+            "-i",
+            str(path),
+            "-vf",
+            r"select=gt(scene\,0.3),metadata=print:file=-",
+            "-an",
+            "-sn",
+            "-f",
+            "null",
+            "-",
         ]
         stdout, stderr, rc = run_cmd(cmd)
         if rc != 0:
@@ -214,10 +242,22 @@ class CQSelector:
         sample_ref = tdir / f"vmafref_{job_id}_{stem}.mkv"
 
         cut_cmd = [
-            "ffmpeg", "-y", "-v", "error",
-            "-ss", str(ss), "-t", str(sample_secs),
-            "-i", str(src),
-            "-map", "0:v:0", "-an", "-sn", "-c:v", "copy",
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-ss",
+            str(ss),
+            "-t",
+            str(sample_secs),
+            "-i",
+            str(src),
+            "-map",
+            "0:v:0",
+            "-an",
+            "-sn",
+            "-c:v",
+            "copy",
             str(sample_ref),
         ]
         _, _, rc = run_cmd(cut_cmd, timeout=60)
@@ -237,9 +277,7 @@ class CQSelector:
             if cq_val in tried:
                 return tried[cq_val]
             sample_enc = tdir / f"vmafenc_{job_id}_{stem}_{cq_val}.mkv"
-            ok = self.ffmpeg_engine.vmaf_probe_encode(
-                sample_ref, sample_enc, encoder, cq_val, job_id, info=info
-            )
+            ok = self.ffmpeg_engine.vmaf_probe_encode(sample_ref, sample_enc, encoder, cq_val, job_id, info=info)
             if not ok:
                 tried[cq_val] = -1.0
                 return -1.0

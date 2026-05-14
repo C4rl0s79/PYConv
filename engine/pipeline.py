@@ -13,6 +13,7 @@ zwalnia slot → maks. 2 pliki lokalne na raz (1 pobrany + 1 enkodowany).
 Dwa GPU: wspólny workqueue, każdy ma własny downloadlock (równoległe
 pobieranie), wspólny upload_lock (serializacja — serwer nie przeciążony).
 """
+
 from __future__ import annotations
 
 import json
@@ -93,8 +94,12 @@ class _WorkerBase:
                 bitdepth=info.get("bitdepth", 8),
             )
             file_cq = self.cq_selector.auto_cq(
-                cfg.encoder, mi.height, mi.bitrate_kbps,
-                mi.width, mi.fps, mi.video_codec,
+                cfg.encoder,
+                mi.height,
+                mi.bitrate_kbps,
+                mi.width,
+                mi.fps,
+                mi.video_codec,
             )
 
         # HQ: complexity probe (scene change rate)
@@ -111,8 +116,13 @@ class _WorkerBase:
         if cfg.hq_mode and cfg.vmaf_target > 0 and cfg.cq is None and duration >= 60:
             try:
                 found = self.cq_selector.vmaf_target_search(
-                    local_src, cfg.encoder, file_cq, duration,
-                    cfg.vmaf_target, label, cfg.tmpdir,
+                    local_src,
+                    cfg.encoder,
+                    file_cq,
+                    duration,
+                    cfg.vmaf_target,
+                    label,
+                    cfg.tmpdir,
                 )
                 if found:
                     file_cq = found
@@ -170,8 +180,12 @@ class SequentialWorker(_WorkerBase):
 
             def cleanup_tmp(
                 restore_original: bool = False,
-                _t=_tmp_out_ref, _l=_local_src_ref,
-                _sp=src_path, _fn=fname, _lb=label, _cfg=cfg,
+                _t=_tmp_out_ref,
+                _l=_local_src_ref,
+                _sp=src_path,
+                _fn=fname,
+                _lb=label,
+                _cfg=cfg,
             ):
                 for p in [_t[0], (_l[0] if _l[0] != _sp else None)]:
                     if p and p.exists():
@@ -200,8 +214,13 @@ class SequentialWorker(_WorkerBase):
             _tmp_out_ref[0] = tmp_out
 
             result = self.ffmpeg.run_encode_with_fallback(
-                local_src, tmp_out, cfg.encoder, file_cq,
-                job_id=label, duration=duration, on_progress=upd_convert,
+                local_src,
+                tmp_out,
+                cfg.encoder,
+                file_cq,
+                job_id=label,
+                duration=duration,
+                on_progress=upd_convert,
             )
 
             if result.used_encoder and result.used_encoder != cfg.encoder:
@@ -221,7 +240,9 @@ class SequentialWorker(_WorkerBase):
             if new_size > src_size:
                 grow = int((new_size - src_size) / src_size * 100)
                 logger.info(f"[{label}] Pominięto BIGGER +{grow}%: {fname}")
-                self.on_row_update(info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%")
+                self.on_row_update(
+                    info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%"
+                )
                 cleanup_tmp()
                 work_queue.task_done()
                 continue
@@ -351,10 +372,10 @@ class PipelineWorker(_WorkerBase):
             if cfg.use_copyparty and self.cp:
                 logger.info(f"[{label}] Pobieranie HTTP pipeline: {fname}")
                 self.on_row_update(info.get("rowid"), status="Pobieranie HTTP")
-                with (cfg.download_lock or threading.Lock()):
+                with cfg.download_lock or threading.Lock():
                     ok = self.cp.download_file(src_path, local_src, src_size, label, on_progress=upd_copy)
             else:
-                with (cfg.copy_lock or threading.Lock()):
+                with cfg.copy_lock or threading.Lock():
                     logger.info(f"[{label}] Kopiowanie pipeline: {fname}")
                     ok = self._copy_with_progress(src_path, local_src, src_size, upd_copy)
 
@@ -405,8 +426,13 @@ class PipelineWorker(_WorkerBase):
             self.on_row_update(info.get("rowid"), status=f"{label} CQ={file_cq}", gpu=label)
 
             result = self.ffmpeg.run_encode_with_fallback(
-                local_src, tmp_out, cfg.encoder, file_cq,
-                job_id=label, duration=duration, on_progress=upd_convert,
+                local_src,
+                tmp_out,
+                cfg.encoder,
+                file_cq,
+                job_id=label,
+                duration=duration,
+                on_progress=upd_convert,
             )
 
             if result.used_encoder and result.used_encoder != cfg.encoder:
@@ -427,7 +453,9 @@ class PipelineWorker(_WorkerBase):
             if new_size > src_size:
                 grow = int((new_size - src_size) / src_size * 100)
                 logger.info(f"[{label}] Pominięto BIGGER +{grow}%: {fname}")
-                self.on_row_update(info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%")
+                self.on_row_update(
+                    info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%"
+                )
                 rm_silent(tmp_out)
                 rm_silent(local_src)
                 work_queue.task_done()
@@ -473,16 +501,22 @@ class PipelineWorker(_WorkerBase):
                 except Exception:
                     vmaf_val = 0.0
                 entry = {
-                    "fname": fname, "encoder": cfg.encoder.value, "gpu": label, "cq": file_cq,
+                    "fname": fname,
+                    "encoder": cfg.encoder.value,
+                    "gpu": label,
+                    "cq": file_cq,
                     "srcsizemb": round(info.get("size", 0) / 1024 / 1024, 2),
                     "outsizemb": round(new_size / 1024 / 1024, 2),
-                    "savingspct": int(savings * 100), "vmaf": round(vmaf_val, 4),
+                    "savingspct": int(savings * 100),
+                    "vmaf": round(vmaf_val, 4),
                 }
                 with self._test_lock:
                     self.test_results.append(entry)
                 pcts = int(savings * 100)
                 logger.info(f"[{label}] TEST VMAF={vmaf_val:.2f} -{pcts}% CQ={file_cq}: {fname}")
-                self.on_row_update(info.get("rowid"), status=f"VMAF={vmaf_val:.2f} -{pcts}%", tag="done", savings=f"-{pcts}%")
+                self.on_row_update(
+                    info.get("rowid"), status=f"VMAF={vmaf_val:.2f} -{pcts}%", tag="done", savings=f"-{pcts}%"
+                )
                 upd_out(100)
                 work_queue.task_done()
                 continue
@@ -494,7 +528,7 @@ class PipelineWorker(_WorkerBase):
                 logger.info(f"[{label}] Upload HTTP pipeline: {dir_url}/{out_fname}")
                 self.on_row_update(info.get("rowid"), status="Upload HTTP")
 
-                with (cfg.upload_lock or threading.Lock()):
+                with cfg.upload_lock or threading.Lock():
                     file_url = f"{dir_url}/{out_fname}"
                     up_result = self.cp.upload_file(tmp_out, file_url, label, on_progress=upd_out)
                 if not up_result.ok and up_result.status.value != "in_progress":
@@ -523,7 +557,7 @@ class PipelineWorker(_WorkerBase):
                 # SMB / mounted — kopia z weryfikacją SHA-256
                 dest_net = src_path.with_suffix(".mkv")
                 in_place = src_path.resolve() == dest_net.resolve()
-                with (cfg.copy_lock or threading.Lock()):
+                with cfg.copy_lock or threading.Lock():
                     ok = self._copy_with_progress(tmp_out, dest_net, new_size, upd_out, verify_sha=True)
 
                 if not ok or not dest_net.exists():
@@ -563,20 +597,23 @@ class PipelineWorker(_WorkerBase):
         encode_q: queue.Queue = queue.Queue(maxsize=1)
         upload_q: queue.Queue = queue.Queue(maxsize=2)
 
-        t_fetch  = threading.Thread(
+        t_fetch = threading.Thread(
             target=self._prefetch_thread,
             args=(work_queue, encode_q, prefetch_sem),
-            daemon=True, name=f"prefetch-{label}",
+            daemon=True,
+            name=f"prefetch-{label}",
         )
         t_encode = threading.Thread(
             target=self._encode_thread,
             args=(work_queue, encode_q, upload_q, prefetch_sem),
-            daemon=True, name=f"encode-{label}",
+            daemon=True,
+            name=f"encode-{label}",
         )
         t_upload = threading.Thread(
             target=self._upload_thread,
             args=(work_queue, upload_q),
-            daemon=True, name=f"upload-{label}",
+            daemon=True,
+            name=f"upload-{label}",
         )
         t_fetch.start()
         t_encode.start()
@@ -590,9 +627,10 @@ class PipelineWorker(_WorkerBase):
         ts = datetime.now().strftime("%Y%m%d%H%M%S")
         json_path = self.cfg.tmpdir / f"testvmaf_{label}_{ts}.json"
         vmaf_vals = [r["vmaf"] for r in self.test_results if r["vmaf"] > 0]
-        sav_vals  = [r["savingspct"] for r in self.test_results]
+        sav_vals = [r["savingspct"] for r in self.test_results]
         payload = {
-            "runid": ts, "gpu_label": label,
+            "runid": ts,
+            "gpu_label": label,
             "encoder": self.cfg.encoder.value,
             "total_files": len(self.test_results),
             "summary": {
