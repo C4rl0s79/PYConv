@@ -1,4 +1,5 @@
 """Scene complexity probe – used by HQ mode to adjust CQ."""
+
 from __future__ import annotations
 from utils.subprocess_utils import run_cmd
 
@@ -16,10 +17,22 @@ def complexity_probe(path: str, duration: float, sample_secs: int = 20) -> float
         t = sample_secs
 
     cmd = [
-        "ffmpeg", "-v", "error",
-        "-ss", str(ss), "-t", str(t), "-i", path,
-        "-vf", "select='gt(scene,0.3)',metadata=print:file=-",
-        "-an", "-sn", "-f", "null", "-",
+        "ffmpeg",
+        "-v",
+        "error",
+        "-ss",
+        str(ss),
+        "-t",
+        str(t),
+        "-i",
+        path,
+        "-vf",
+        "select='gt(scene,0.3)',metadata=print:file=-",
+        "-an",
+        "-sn",
+        "-f",
+        "null",
+        "-",
     ]
     stdout, stderr, rc = run_cmd(cmd)
     if rc != 0:

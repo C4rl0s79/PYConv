@@ -1,4 +1,5 @@
 """Standalone download_file() function – thin wrapper around CopypartyClient."""
+
 from __future__ import annotations
 from typing import Callable, Optional
 from .copyparty import CopypartyClient

@@ -1,4 +1,5 @@
 """Standalone upload_file() function + post-upload verification workflow."""
+
 from __future__ import annotations
 import os
 from typing import Callable, Optional
@@ -54,9 +55,7 @@ def upload_file(
                 result.remote_size = local_size
                 log.info("Upload verified OK: %s", fname)
                 return result
-            log.warning(
-                "Upload size mismatch on attempt %d: %s – retrying", attempt, fname
-            )
+            log.warning("Upload size mismatch on attempt %d: %s – retrying", attempt, fname)
 
     return UploadResult(
         status=UploadStatus.FAILED,

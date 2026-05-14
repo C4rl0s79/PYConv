@@ -1,4 +1,5 @@
 """JSON config helpers — cfgload() i cfgsave() z monolitu."""
+
 from __future__ import annotations
 import json
 from pathlib import Path

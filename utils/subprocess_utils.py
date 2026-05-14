@@ -3,6 +3,7 @@
 Zastępuje subprocess.run() wszędzie tam gdzie FFmpeg generuje duże stderr/stdout.
 Kluczowe: bufsize=1 = line-buffered, zero ryzyka ogromnych stderr blobów.
 """
+
 from __future__ import annotations
 import subprocess
 import sys
@@ -26,7 +27,7 @@ def ffmpeg_popen(cmd: List[str], job_id: str = "") -> Iterator[subprocess.Popen]
         "stdout": subprocess.PIPE,
         "stderr": subprocess.PIPE,
         "text": True,
-        "bufsize": 1,          # line-buffered — kluczowe dla live GUI
+        "bufsize": 1,  # line-buffered — kluczowe dla live GUI
         "universal_newlines": True,
     }
     if NOWINDOW:

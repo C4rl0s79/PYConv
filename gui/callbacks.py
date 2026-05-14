@@ -1,4 +1,5 @@
 """callbacks.py — cała logika biznesowa GUI oddzielona od widgetów."""
+
 from __future__ import annotations
 
 import os
@@ -10,55 +11,61 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .app import PlexConvertApp
 
+
 # ---------------------------------------------------------------------------
 # Lazy-safe imports — działają zarówno jako pakiet jak i standalone
 # ---------------------------------------------------------------------------
 def _imp(rel, abs_):
     """Próbuje relative import, przy błędzie wraca do absolutnego."""
     import importlib
+
     try:
         return importlib.import_module(rel, package="gui")
     except ImportError:
         return importlib.import_module(abs_)
 
+
 try:
     from ..config.constants import SAFE_FREE_GB, WARN_FREE_GB
-    from ..config.profiles  import QSVPROFILES, ENCODER_OPTIONS
-    from ..media.probe      import probe_file, scan_dir, cp_probe_via_http
-    from ..network.client   import CopypartyClient
+    from ..config.profiles import QSVPROFILES, ENCODER_OPTIONS
+    from ..media.probe import probe_file, scan_dir, cp_probe_via_http
+    from ..network.client import CopypartyClient
     from ..utils.filesystem import free_gb, detect_network_drives
     from ..utils.json_utils import cfg_load, cfg_save
-    from ..engine.pipeline  import PipelineWorker, SequentialWorker, PipelineConfig
-    from ..engine.progress  import ProgressTracker
+    from ..engine.pipeline import PipelineWorker, SequentialWorker, PipelineConfig
+    from ..engine.progress import ProgressTracker
     from ..engine.cq_selector import CQSelector
-    from ..models.enums     import EncoderType
+    from ..models.enums import EncoderType
 except ImportError:
-    from config.constants   import SAFE_FREE_GB, WARN_FREE_GB      # type: ignore
-    from config.profiles    import QSVPROFILES, ENCODER_OPTIONS     # type: ignore
-    from media.probe        import probe_file, scan_dir, cp_probe_via_http  # type: ignore
-    from network.client     import CopypartyClient                  # type: ignore
-    from utils.filesystem   import free_gb, detect_network_drives   # type: ignore
-    from utils.json_utils   import cfg_load, cfg_save               # type: ignore
-    from engine.pipeline    import PipelineWorker, SequentialWorker, PipelineConfig  # type: ignore
-    from engine.progress    import ProgressTracker                  # type: ignore
-    from engine.cq_selector import CQSelector                       # type: ignore
-    from models.enums       import EncoderType                      # type: ignore
+    from config.constants import SAFE_FREE_GB, WARN_FREE_GB  # type: ignore
+    from config.profiles import QSVPROFILES, ENCODER_OPTIONS  # type: ignore
+    from media.probe import probe_file, scan_dir, cp_probe_via_http  # type: ignore
+    from network.client import CopypartyClient  # type: ignore
+    from utils.filesystem import free_gb, detect_network_drives  # type: ignore
+    from utils.json_utils import cfg_load, cfg_save  # type: ignore
+    from engine.pipeline import PipelineWorker, SequentialWorker, PipelineConfig  # type: ignore
+    from engine.progress import ProgressTracker  # type: ignore
+    from engine.cq_selector import CQSelector  # type: ignore
+    from models.enums import EncoderType  # type: ignore
 
 
 # ---------------------------------------------------------------------------
 # Scan
 # ---------------------------------------------------------------------------
 
+
 def start_scan(app: "PlexConvertApp") -> None:
     if app.use_copyparty.get():
         if not app.cp_src_url.get().strip():
             from tkinter import messagebox
+
             messagebox.showwarning("Copyparty", "Wpisz URL katalogu lub kliknij … aby wybrać z serwera.")
             return
     else:
         src = app.src_var.get().strip()
         if not src:
             from tkinter import messagebox
+
             messagebox.showwarning("Brak ścieżki", "Wybierz plik lub folder.")
             return
     app.cancel_flag.clear()
@@ -76,9 +83,9 @@ def _scan_worker(app: "PlexConvertApp") -> None:
 
 
 def _scan_copyparty(app: "PlexConvertApp") -> None:
-    cp_url  = app.cp_src_url.get().strip()
+    cp_url = app.cp_src_url.get().strip()
     cp_pass = app.cp_password.get()
-    cp_tmp  = app.tmp_var.get()
+    cp_tmp = app.tmp_var.get()
     app.log_msg(f"Skanowanie Copyparty: {cp_url}", "INFO")
     try:
         cp_files = CopypartyClient(cp_url, cp_pass).list_files(cp_url, cp_pass)
@@ -100,16 +107,16 @@ def _scan_copyparty(app: "PlexConvertApp") -> None:
                 err = info.get("error_msg", "?") if info else "brak wyniku"
                 app.log_msg(f"BŁĄD probe {cf['name']}: {err}", "ERROR")
                 continue
-            info["path"]   = cf["path_url"]
-            info["size"]   = cf["size"]
+            info["path"] = cf["path_url"]
+            info["size"] = cf["size"]
             info["cpname"] = cf["name"]
-            info["cpdir"]  = cf["dir_url"]
-            info["rowid"]  = str(i)
+            info["cpdir"] = cf["dir_url"]
+            info["rowid"] = str(i)
             app.files.append(info)
             codec = info.get("codec", "?").lower()
             tag, status = _classify(app, info, codec)
             _add_row(app, str(i), cf["name"], codec, info, cf["size"], status, tag)
-            set_pb(app, "totalpb", int((i + 1) / n * 100), "totalinfo", f"Skanowanie CP {i+1}/{n}")
+            set_pb(app, "totalpb", int((i + 1) / n * 100), "totalinfo", f"Skanowanie CP {i + 1}/{n}")
         except Exception as e:
             app.log_msg(f"BŁĄD skanowania {cf['name']}: {e}", "ERROR")
 
@@ -141,7 +148,7 @@ def _scan_local(app: "PlexConvertApp") -> None:
             tag, status = _classify(app, info, codec)
             fname = os.path.basename(path)
             _add_row(app, str(i), fname, codec, info, info["size"], status, tag)
-            set_pb(app, "totalpb", int((i + 1) / len(paths) * 100), "totalinfo", f"Skanowanie {i+1}/{len(paths)}")
+            set_pb(app, "totalpb", int((i + 1) / len(paths) * 100), "totalinfo", f"Skanowanie {i + 1}/{len(paths)}")
         except Exception as e:
             app.log_msg(f"BŁĄD skanowania {os.path.basename(path)}: {e}", "ERROR")
 
@@ -162,16 +169,19 @@ def _classify(app, info: dict, codec: str) -> tuple[str, str]:
 
 
 def _add_row(app, iid: str, fname: str, codec: str, info: dict, size: int, status: str, tag: str) -> None:
-    res   = f"{info.get('width', 0)}x{info.get('height', 0)}" if info.get("width") else "?"
+    res = f"{info.get('width', 0)}x{info.get('height', 0)}" if info.get("width") else "?"
     fsize = f"{size / 1024**3:.2f} GB"
-    hdrs  = "TAK" if info.get("hdr") else "nie"
+    hdrs = "TAK" if info.get("hdr") else "nie"
 
     def add():
         app.tree.insert(
-            "", "end", iid=iid,
+            "",
+            "end",
+            iid=iid,
             values=("", fname, codec, res, fsize, hdrs, status, "", ""),
             tags=(tag,),
         )
+
     app.ui(add)
 
 
@@ -179,9 +189,11 @@ def _add_row(app, iid: str, fname: str, codec: str, info: dict, size: int, statu
 # Convert
 # ---------------------------------------------------------------------------
 
+
 def start_convert(app: "PlexConvertApp") -> None:
     if not app.files:
         from tkinter import messagebox
+
         messagebox.showwarning("Brak plików", "Najpierw wykonaj skanowanie.")
         return
 
@@ -190,23 +202,24 @@ def start_convert(app: "PlexConvertApp") -> None:
 
     is_net = app.is_network.get()
     if not is_net:
-        app.bar_colors["copycv"]  = app.theme_colors.get("TEXTMUTED", "#666")
+        app.bar_colors["copycv"] = app.theme_colors.get("TEXTMUTED", "#666")
         app.bar_colors["uploadcv"] = app.theme_colors.get("TEXTMUTED", "#666")
-        set_pb(app, "copypb",   100, "copyinfo",   "Nieaktywne — tryb lokalny")
+        set_pb(app, "copypb", 100, "copyinfo", "Nieaktywne — tryb lokalny")
         set_pb(app, "uploadpb", 100, "uploadinfo", "Nieaktywne — tryb lokalny")
     else:
-        app.bar_colors["copycv"]  = "#8b5cf6"
+        app.bar_colors["copycv"] = "#8b5cf6"
         app.bar_colors["uploadcv"] = "#e879f9"
-        set_pb(app, "copypb",   0, "copyinfo",   "")
+        set_pb(app, "copypb", 0, "copyinfo", "")
         set_pb(app, "uploadpb", 0, "uploadinfo", "")
 
-    skip_av1  = app.skip_av1.get()
+    skip_av1 = app.skip_av1.get()
     skip_hevc = app.skip_hevc.get()
     to_convert = [
-        f for f in app.files
+        f
+        for f in app.files
         if _is_row_selected(app, f)
         and not (f.get("hdr") and app.skip_hdr.get())
-        and not (f.get("codec", "").lower() == "av1"  and skip_av1)
+        and not (f.get("codec", "").lower() == "av1" and skip_av1)
         and not (f.get("codec", "").lower() in ("hevc", "h265") and skip_hevc)
     ]
     total = len(to_convert)
@@ -219,19 +232,19 @@ def start_convert(app: "PlexConvertApp") -> None:
     for idx, info in enumerate(to_convert):
         work_queue.put((idx, info))
 
-    tracker  = ProgressTracker(total, is_net)
-    enc1     = EncoderType(app.enc1_var.get())
-    enc2     = EncoderType(app.enc2_var.get()) if app.gpu2_enabled.get() else None
-    cq1      = None if app.auto_cq.get() else app.cq1_var.get()
-    cq2      = None if app.auto_cq.get() else (app.cq2_var.get() if app.gpu2_enabled.get() else None)
-    min_sav  = app.min_save_var.get() / 100.0
-    tmp_dir  = Path(app.tmp_var.get())
-    keep     = app.keep_orig.get()
-    test     = app.test_mode.get()
-    hq       = app.hq_mode.get()
-    vmaf_t   = float(app.vmaf_target.get()) if hq and app.vmaf_enabled.get() else 0.0
+    tracker = ProgressTracker(total, is_net)
+    enc1 = EncoderType(app.enc1_var.get())
+    enc2 = EncoderType(app.enc2_var.get()) if app.gpu2_enabled.get() else None
+    cq1 = None if app.auto_cq.get() else app.cq1_var.get()
+    cq2 = None if app.auto_cq.get() else (app.cq2_var.get() if app.gpu2_enabled.get() else None)
+    min_sav = app.min_save_var.get() / 100.0
+    tmp_dir = Path(app.tmp_var.get())
+    keep = app.keep_orig.get()
+    test = app.test_mode.get()
+    hq = app.hq_mode.get()
+    vmaf_t = float(app.vmaf_target.get()) if hq and app.vmaf_enabled.get() else 0.0
     qsv_prof = app.qsv_profile.get()
-    anime    = app.anime_mode.get()
+    anime = app.anime_mode.get()
 
     cq_sel = CQSelector(
         ffmpeg_engine=app.ffmpeg,
@@ -242,7 +255,7 @@ def start_convert(app: "PlexConvertApp") -> None:
 
     cq1_str = "auto" if cq1 is None else str(cq1)
     cq2_str = "auto" if cq2 is None else str(cq2)
-    hq_str  = (" HQ" if hq else "") + (f" VMAF={vmaf_t:.0f}" if vmaf_t > 0 else "")
+    hq_str = (" HQ" if hq else "") + (f" VMAF={vmaf_t:.0f}" if vmaf_t > 0 else "")
     app.log_msg(
         f"Konwersja {total} plików  GPU1={enc1.value} CQ={cq1_str}"
         f"  GPU2={enc2.value if enc2 else 'wyłączone'} CQ={cq2_str}"
@@ -253,8 +266,8 @@ def start_convert(app: "PlexConvertApp") -> None:
 
     dl_lock1 = threading.Lock()
     dl_lock2 = threading.Lock()
-    ul_lock  = threading.Lock()
-    cp_lock  = threading.Lock()
+    ul_lock = threading.Lock()
+    cp_lock = threading.Lock()
 
     configs = [(enc1, "file1pb", "file1info", "GPU1", 1, cq1, dl_lock1)]
     if enc2:
@@ -267,11 +280,16 @@ def start_convert(app: "PlexConvertApp") -> None:
         set_pb(app, "file2pb", 0, "file2info", "GPU2 wyłączony")
 
     workers = []
-    for enc, pb, pb_info, log_tag, gpu_label, gpu_cq, dl_lock in configs:
+    for enc, pb, pb_info, log_tag, _gpu_label, gpu_cq, dl_lock in configs:
         cfg = PipelineConfig(
-            encoder=enc, gpu_label=log_tag, cq=gpu_cq,
-            tmpdir=tmp_dir, min_savings=min_sav,
-            keep_orig=keep, hq_mode=hq, vmaf_target=vmaf_t,
+            encoder=enc,
+            gpu_label=log_tag,
+            cq=gpu_cq,
+            tmpdir=tmp_dir,
+            min_savings=min_sav,
+            keep_orig=keep,
+            hq_mode=hq,
+            vmaf_target=vmaf_t,
             test_mode=test,
             use_copyparty=app.use_copyparty.get(),
             cp_src_url=app.cp_src_url.get().strip(),
@@ -283,26 +301,35 @@ def start_convert(app: "PlexConvertApp") -> None:
         )
 
         def make_row_cb(a=app):
-            def cb(rowid, **kw): update_row(a, rowid, **kw)
+            def cb(rowid, **kw):
+                update_row(a, rowid, **kw)
+
             return cb
 
         def make_pb_cb(pb_=pb, pbi_=pb_info, a=app):
             def cb(val, label=""):
                 set_pb(a, pb_, val, pbi_, label)
+
             return cb
 
         if is_net:
             w = PipelineWorker(
-                config=cfg, ffmpeg=app.ffmpeg, cq_selector=cq_sel,
+                config=cfg,
+                ffmpeg=app.ffmpeg,
+                cq_selector=cq_sel,
                 copyparty=app.cp_client if app.use_copyparty.get() else None,
-                tracker=tracker, total=total,
+                tracker=tracker,
+                total=total,
                 on_row_update=make_row_cb(),
                 on_progress_update=make_pb_cb(),
             )
         else:
             w = SequentialWorker(
-                config=cfg, ffmpeg=app.ffmpeg, cq_selector=cq_sel,
-                tracker=tracker, total=total,
+                config=cfg,
+                ffmpeg=app.ffmpeg,
+                cq_selector=cq_sel,
+                tracker=tracker,
+                total=total,
                 on_row_update=make_row_cb(),
                 on_progress_update=make_pb_cb(),
             )
@@ -325,6 +352,7 @@ def start_convert(app: "PlexConvertApp") -> None:
 # UI helpers
 # ---------------------------------------------------------------------------
 
+
 def cancel(app: "PlexConvertApp") -> None:
     app.cancel_flag.set()
     app.log_msg("Anulowanie — nowe pliki nie będą już startować.", "WARN")
@@ -340,11 +368,13 @@ def clear(app: "PlexConvertApp") -> None:
 
 def set_buttons(app: "PlexConvertApp", running: bool) -> None:
     s = "disabled" if running else "normal"
+
     def do():
         app.btn_scan.config(state=s)
         app.btn_convert.config(state=s)
         app.btn_clear.config(state=s)
         app.btn_cancel.config(state="normal" if running else "disabled")
+
     app.ui(do)
 
 
@@ -352,21 +382,25 @@ def update_row(app: "PlexConvertApp", rowid, status=None, tag=None, savings=None
     def do():
         if not rowid or not app.tree.exists(rowid):
             return
-        if status:  app.tree.set(rowid, "status",  status)
-        if savings: app.tree.set(rowid, "savings", savings)
-        if gpu:     app.tree.set(rowid, "gpu",     gpu)
-        if tag:     app.tree.item(rowid, tags=(tag,))
+        if status:
+            app.tree.set(rowid, "status", status)
+        if savings:
+            app.tree.set(rowid, "savings", savings)
+        if gpu:
+            app.tree.set(rowid, "gpu", gpu)
+        if tag:
+            app.tree.item(rowid, tags=(tag,))
+
     app.ui(do)
 
 
-def set_pb(app: "PlexConvertApp", pb_attr: str, value: float,
-           info_attr: str = None, info_text: str = None) -> None:
+def set_pb(app: "PlexConvertApp", pb_attr: str, value: float, info_attr: str = None, info_text: str = None) -> None:
     PB_MAP = {
-        "copypb":   ("copycv",   "copypct"),
+        "copypb": ("copycv", "copypct"),
         "uploadpb": ("uploadcv", "uploadpct"),
-        "file1pb":  ("file1cv",  "file1pct"),
-        "file2pb":  ("file2cv",  "file2pct"),
-        "totalpb":  ("totalcv",  "totalpct"),
+        "file1pb": ("file1cv", "file1pct"),
+        "file2pb": ("file2cv", "file2pct"),
+        "totalpb": ("totalcv", "totalpct"),
     }
     if pb_attr not in PB_MAP:
         return
@@ -383,6 +417,7 @@ def set_pb(app: "PlexConvertApp", pb_attr: str, value: float,
         except ImportError:
             from theme import redraw_bar  # type: ignore
         redraw_bar(app, cv_attr)
+
     app.ui(do)
 
 
@@ -397,6 +432,7 @@ def _is_row_selected(app, info: dict) -> bool:
 # ---------------------------------------------------------------------------
 # Tree
 # ---------------------------------------------------------------------------
+
 
 def sort_tree(app: "PlexConvertApp", col: str) -> None:
     def key_fn(item_id):
@@ -447,6 +483,7 @@ def deselect_all(app: "PlexConvertApp") -> None:
 # Toggle handlers
 # ---------------------------------------------------------------------------
 
+
 def on_gpu2_toggle(app: "PlexConvertApp") -> None:
     enabled = app.gpu2_enabled.get()
     app.enc2_cb.config(state="readonly" if enabled else "disabled")
@@ -494,26 +531,24 @@ def on_network_toggle(app: "PlexConvertApp") -> None:
         drives = detect_network_drives()
         app.net_drives_var.set(", ".join(drives) if drives else "brak wykrytych")
         refresh_free(app)
-        app.bar_colors["copycv"]  = "#8b5cf6"
+        app.bar_colors["copycv"] = "#8b5cf6"
         app.bar_colors["uploadcv"] = "#e879f9"
-        set_pb(app, "copypb",   0, "copyinfo",   "")
+        set_pb(app, "copypb", 0, "copyinfo", "")
         set_pb(app, "uploadpb", 0, "uploadinfo", "")
     else:
-        app.bar_colors["copycv"]  = app.theme_colors.get("TEXTMUTED", "#666")
+        app.bar_colors["copycv"] = app.theme_colors.get("TEXTMUTED", "#666")
         app.bar_colors["uploadcv"] = app.theme_colors.get("TEXTMUTED", "#666")
-        set_pb(app, "copypb",   100, "copyinfo",   "Nieaktywne — tryb lokalny")
+        set_pb(app, "copypb", 100, "copyinfo", "Nieaktywne — tryb lokalny")
         set_pb(app, "uploadpb", 100, "uploadinfo", "Nieaktywne — tryb lokalny")
 
 
 def on_qsv_profile_change(app: "PlexConvertApp") -> None:
     p = app.qsv_profile.get()
     prof = QSVPROFILES.get(p, {})
-    gq_av1  = prof.get("av1qsv",  {}).get(1080, "?")
+    gq_av1 = prof.get("av1qsv", {}).get(1080, "?")
     gq_hevc = prof.get("hevcqsv", {}).get(1080, "?")
     try:
-        app.qsv_profile_lbl.config(
-            text=f"GQ 1080p  av1qsv={gq_av1}  hevcqsv={gq_hevc}  [{p}]"
-        )
+        app.qsv_profile_lbl.config(text=f"GQ 1080p  av1qsv={gq_av1}  hevcqsv={gq_hevc}  [{p}]")
     except Exception:
         pass
     update_statusbar(app)
@@ -531,8 +566,10 @@ def on_copyparty_toggle(app: "PlexConvertApp") -> None:
 # Misc
 # ---------------------------------------------------------------------------
 
+
 def browse_src(app: "PlexConvertApp") -> None:
     from tkinter import filedialog
+
     if app.mode.get() == "folder":
         path = filedialog.askdirectory(title="Wybierz folder biblioteki")
     else:
@@ -559,18 +596,14 @@ def refresh_free(app: "PlexConvertApp") -> None:
 
 def update_statusbar(app: "PlexConvertApp") -> None:
     try:
-        p    = app.qsv_profile.get()
-        a    = " Anime" if app.anime_mode.get() else ""
+        p = app.qsv_profile.get()
+        a = " Anime" if app.anime_mode.get() else ""
         enc1 = app.enc1_var.get()
         enc2 = app.enc2_var.get() if app.gpu2_enabled.get() else "—"
         prof = QSVPROFILES.get(p, {})
-        gq_av1  = prof.get("av1qsv",  {}).get(1080, "?")
+        gq_av1 = prof.get("av1qsv", {}).get(1080, "?")
         gq_hevc = prof.get("hevcqsv", {}).get(1080, "?")
-        txt = (
-            f"QSV {p.upper()}{a}  "
-            f"av1qsv GQ={gq_av1}  hevcqsv GQ={gq_hevc}  "
-            f"GPU1={enc1}  GPU2={enc2}"
-        )
+        txt = f"QSV {p.upper()}{a}  av1qsv GQ={gq_av1}  hevcqsv GQ={gq_hevc}  GPU1={enc1}  GPU2={enc2}"
         app.statusbar.config(text=txt)
     except Exception:
         pass
@@ -581,30 +614,30 @@ def update_statusbar(app: "PlexConvertApp") -> None:
 # ---------------------------------------------------------------------------
 
 SESSION_FIELDS = [
-    ("src_var",       "src",         None),
-    ("mode",          "mode",        None),
-    ("is_network",    "isnetwork",   None),
-    ("tmp_var",       "tmp",         None),
-    ("enc1_var",      "enc1",        None),
-    ("gpu2_enabled",  "gpu2enabled", None),
-    ("enc2_var",      "enc2",        None),
-    ("auto_cq",       "autocq",      None),
-    ("cq1_var",       "cq1",         int),
-    ("cq2_var",       "cq2",         int),
-    ("min_save_var",  "minsave",     int),
-    ("hq_mode",       "hqmode",      None),
-    ("vmaf_enabled",  "vmafenabled", None),
-    ("vmaf_target",   "vmaftarget",  float),
-    ("qsv_profile",   "qsvprofile",  None),
-    ("anime_mode",    "animemode",   None),
-    ("skip_hdr",      "skiphdr",     None),
-    ("skip_av1",      "skipav1",     None),
-    ("skip_hevc",     "skiphevc",    None),
-    ("keep_orig",     "keeporig",    None),
-    ("test_mode",     "testmode",    None),
-    ("use_copyparty", "cpuse",       None),
-    ("cp_src_url",    "cpurl",       None),
-    ("cp_remember",   "cpremember",  None),
+    ("src_var", "src", None),
+    ("mode", "mode", None),
+    ("is_network", "isnetwork", None),
+    ("tmp_var", "tmp", None),
+    ("enc1_var", "enc1", None),
+    ("gpu2_enabled", "gpu2enabled", None),
+    ("enc2_var", "enc2", None),
+    ("auto_cq", "autocq", None),
+    ("cq1_var", "cq1", int),
+    ("cq2_var", "cq2", int),
+    ("min_save_var", "minsave", int),
+    ("hq_mode", "hqmode", None),
+    ("vmaf_enabled", "vmafenabled", None),
+    ("vmaf_target", "vmaftarget", float),
+    ("qsv_profile", "qsvprofile", None),
+    ("anime_mode", "animemode", None),
+    ("skip_hdr", "skiphdr", None),
+    ("skip_av1", "skipav1", None),
+    ("skip_hevc", "skiphevc", None),
+    ("keep_orig", "keeporig", None),
+    ("test_mode", "testmode", None),
+    ("use_copyparty", "cpuse", None),
+    ("cp_src_url", "cpurl", None),
+    ("cp_remember", "cpremember", None),
 ]
 
 

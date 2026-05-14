@@ -1,4 +1,5 @@
 """Enums for PYConv — replaces scattered string literals and magic numbers."""
+
 from enum import Enum
 
 
@@ -55,15 +56,15 @@ class UploadStatus(Enum):
 class ProbeStatus(Enum):
     OK = "ok"
     CORRUPT = "corrupt"
-    RAWVIDEO = "rawvideo"   # AVI z błędnym FOURCC — objaw decrawvideo
-    NAL_ERROR = "nal_error" # H.264 AnnexB / AVCC mismatch
+    RAWVIDEO = "rawvideo"  # AVI z błędnym FOURCC — objaw decrawvideo
+    NAL_ERROR = "nal_error"  # H.264 AnnexB / AVCC mismatch
     UNREADABLE = "unreadable"
 
 
 class RepairMode(Enum):
-    FOURCC_REMUX = "fourcc_remux"            # Wariant 1: AVI→MKV copy
-    FOURCC_MPEG4 = "fourcc_mpeg4"            # Wariant 2: force mpeg4 decoder
+    FOURCC_REMUX = "fourcc_remux"  # Wariant 1: AVI→MKV copy
+    FOURCC_MPEG4 = "fourcc_mpeg4"  # Wariant 2: force mpeg4 decoder
     FOURCC_H264_LOSSLESS = "fourcc_h264_lossless"  # Wariant 3: libx264 crf=0
-    ANNEXB_BSF = "annexb_bsf"               # extractextradata / h264_mp4toannexb
-    ANNEXB_IGNORE_ERR = "annexb_ignore_err" # -fflags discardcorrupt -err_detect ignore_err
+    ANNEXB_BSF = "annexb_bsf"  # extractextradata / h264_mp4toannexb
+    ANNEXB_IGNORE_ERR = "annexb_ignore_err"  # -fflags discardcorrupt -err_detect ignore_err
     NONE = "none"

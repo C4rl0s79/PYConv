@@ -2,12 +2,12 @@
 
 Zastępuje print() w całym projekcie. Każdy moduł wołuje get_logger(__name__).
 """
+
 from __future__ import annotations
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
 
 _LOG_DIR = Path("logs")
 _FORMATTER = logging.Formatter(

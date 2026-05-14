@@ -3,6 +3,7 @@
 Zachowane 1:1 z monolitu: drzewo katalogów, lazy-load przez HTTP,
 populate_root / populate_node, on_select / on_expand, ok / ask classmethod.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -27,10 +28,10 @@ class CopypartyBrowserDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
-        self.password  = password
+        self.password = password
         self.result_url: Optional[str] = None
         self.node_urls: dict[str, str] = {}
-        self.loading:   set[str]       = set()
+        self.loading: set[str] = set()
 
         # --- Pasek adresu ---
         top = ttk.Frame(self)
@@ -53,8 +54,8 @@ class CopypartyBrowserDialog(tk.Toplevel):
         tf = ttk.Frame(self)
         tf.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
         self.tree = ttk.Treeview(tf, selectmode="browse", show="tree")
-        vsb = ttk.Scrollbar(tf, orient="vertical",   command=self.tree.yview)
-        hsb = ttk.Scrollbar(tf, orient="horizontal",  command=self.tree.xview)
+        vsb = ttk.Scrollbar(tf, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(tf, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
@@ -62,12 +63,12 @@ class CopypartyBrowserDialog(tk.Toplevel):
         tf.rowconfigure(0, weight=1)
         tf.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
-        self.tree.bind("<<TreeviewOpen>>",   self.on_expand)
+        self.tree.bind("<<TreeviewOpen>>", self.on_expand)
 
         # --- Przyciski ---
         btn_row = ttk.Frame(self)
         btn_row.pack(fill=tk.X, padx=6, pady=(2, 6))
-        ttk.Button(btn_row, text="OK",     command=self.ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_row, text="OK", command=self.ok).pack(side=tk.LEFT, padx=4)
         ttk.Button(btn_row, text="Anuluj", command=self.destroy).pack(side=tk.LEFT)
         self.status = ttk.Label(btn_row, text="ładowanie…", foreground="#8b949e")
         self.status.pack(side=tk.LEFT, padx=10)
@@ -100,18 +101,18 @@ class CopypartyBrowserDialog(tk.Toplevel):
                 dirs = [
                     urllib.parse.unquote(d["href"]).rstrip("/")
                     for d in raw_dirs
-                    if isinstance(d, dict) and d.get("href")
+                    if isinstance(d, dict)
+                    and d.get("href")
                     and not urllib.parse.unquote(d["href"]).rstrip("/").startswith(".")
                 ]
                 if not dirs and raw_dirs:
                     dirs = [
                         str(d.get("name", ""))
                         for d in raw_dirs
-                        if isinstance(d, dict) and d.get("name")
-                        and not str(d.get("name", "")).startswith(".")
+                        if isinstance(d, dict) and d.get("name") and not str(d.get("name", "")).startswith(".")
                     ]
                 self.after(0, lambda: self._populate_root(base, dirs))
-            except Exception as e:
+            except Exception:
                 self.after(0, lambda: self.set_status(f"Błąd: {e}"))
 
         threading.Thread(target=load, daemon=True).start()
@@ -167,11 +168,12 @@ class CopypartyBrowserDialog(tk.Toplevel):
                 dirs = [
                     urllib.parse.unquote(d["href"]).rstrip("/")
                     for d in raw_dirs
-                    if isinstance(d, dict) and d.get("href")
+                    if isinstance(d, dict)
+                    and d.get("href")
                     and not urllib.parse.unquote(d["href"]).rstrip("/").startswith(".")
                 ]
                 self.after(0, lambda: self._populate_node(node_iid, node_url, dirs))
-            except Exception as e:
+            except Exception:
                 self.after(0, lambda: self.set_status(f"Błąd: {e}"))
             finally:
                 self.loading.discard(node_iid)

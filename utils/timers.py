@@ -1,4 +1,5 @@
 """Prosty timer kontekstowy do mierzenia czasu enkodu/uploadu."""
+
 from __future__ import annotations
 import time
 from dataclasses import dataclass, field
@@ -7,6 +8,7 @@ from dataclasses import dataclass, field
 @dataclass
 class Timer:
     """Context manager mierzący czas elapsed w sekundach."""
+
     _start: float = field(default_factory=time.monotonic, init=False)
     elapsed: float = 0.0
 

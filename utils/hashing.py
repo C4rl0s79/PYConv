@@ -1,4 +1,5 @@
 """SHA-256 i operacje na plikach — sha256file() + rmsilent() z monolitu."""
+
 from __future__ import annotations
 import hashlib
 import os

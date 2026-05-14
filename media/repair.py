@@ -7,9 +7,9 @@ Original fallback order (preserved 1:1):
 
 This module does NOT change the logic; it only names and isolates it.
 """
+
 from __future__ import annotations
 import os
-from typing import Callable, Optional
 
 from utils.logging_utils import get_logger
 from .ffmpeg import FFmpegEngine

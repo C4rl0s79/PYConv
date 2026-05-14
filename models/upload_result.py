@@ -1,4 +1,5 @@
 """UploadResult dataclass — replace cpuploadfile bool return with full context."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
@@ -8,6 +9,7 @@ from .enums import UploadStatus
 @dataclass
 class UploadResult:
     """Result of a Copyparty upload + verification sequence."""
+
     status: UploadStatus
     local_size: int = 0
     remote_size: int = 0

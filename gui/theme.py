@@ -3,27 +3,28 @@
 Zachowane 1:1 z monolitu: Dark GitHub-style palette, ttk.Style 'clam'.
 Progressbary Canvas (nie TProgressbar) — redraw_bar() tu także.
 """
+
 from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
 # Paleta
-DARKBG   = "#0d1117"
-PANELBG  = "#161b22"
-BORDER   = "#30363d"
-TEXTPRI  = "#e6edf3"
-TEXTSEC  = "#8b949e"
+DARKBG = "#0d1117"
+PANELBG = "#161b22"
+BORDER = "#30363d"
+TEXTPRI = "#e6edf3"
+TEXTSEC = "#8b949e"
 TEXTMUTED = "#484f58"
-ACCENT   = "#58a6ff"
-ACCENT2  = "#79c0ff"
-GREEN    = "#3fb950"
-BLUE     = "#388bfd"
-YELLOW   = "#d29922"
-RED      = "#f85149"
+ACCENT = "#58a6ff"
+ACCENT2 = "#79c0ff"
+GREEN = "#3fb950"
+BLUE = "#388bfd"
+YELLOW = "#d29922"
+RED = "#f85149"
 HDRCOLOR = "#f0c060"
 DONECOLOR = GREEN
 ERRORCOLOR = RED
-SKIPCOLOR  = TEXTSEC
+SKIPCOLOR = TEXTSEC
 
 # Progressbar: canvas-height
 BARH = 22
@@ -34,74 +35,111 @@ def apply_theme(root: tk.Tk) -> None:
     root.configure(bg=DARKBG)
     style = ttk.Style(root)
     style.theme_use("clam")
-    style.configure(".",
-        background=DARKBG, foreground=TEXTPRI,
-        fieldbackground=PANELBG, bordercolor=BORDER,
-        troughcolor=PANELBG, selectbackground=ACCENT,
-        selectforeground=DARKBG, font=("Segoe UI", 9),
+    style.configure(
+        ".",
+        background=DARKBG,
+        foreground=TEXTPRI,
+        fieldbackground=PANELBG,
+        bordercolor=BORDER,
+        troughcolor=PANELBG,
+        selectbackground=ACCENT,
+        selectforeground=DARKBG,
+        font=("Segoe UI", 9),
     )
     for widget, opts in [
-        ("TFrame",    {"background": DARKBG}),
-        ("TLabel",    {"background": DARKBG, "foreground": TEXTPRI}),
+        ("TFrame", {"background": DARKBG}),
+        ("TLabel", {"background": DARKBG, "foreground": TEXTPRI}),
         ("TLabelframe", {"background": DARKBG, "foreground": ACCENT, "bordercolor": BORDER}),
         ("TLabelframe.Label", {"background": DARKBG, "foreground": ACCENT, "font": ("Segoe UI", 9, "bold")}),
-        ("TButton",   {"background": PANELBG, "foreground": TEXTPRI, "bordercolor": BORDER, "padding": 4}),
+        ("TButton", {"background": PANELBG, "foreground": TEXTPRI, "bordercolor": BORDER, "padding": 4}),
         ("TCheckbutton", {"background": DARKBG, "foreground": TEXTPRI}),
         ("TRadiobutton", {"background": DARKBG, "foreground": TEXTPRI}),
-        ("TCombobox", {"fieldbackground": PANELBG, "background": PANELBG, "foreground": TEXTPRI, "arrowcolor": ACCENT, "bordercolor": BORDER}),
-        ("TEntry",    {"fieldbackground": PANELBG, "foreground": TEXTPRI, "insertcolor": TEXTPRI, "bordercolor": BORDER}),
+        (
+            "TCombobox",
+            {
+                "fieldbackground": PANELBG,
+                "background": PANELBG,
+                "foreground": TEXTPRI,
+                "arrowcolor": ACCENT,
+                "bordercolor": BORDER,
+            },
+        ),
+        ("TEntry", {"fieldbackground": PANELBG, "foreground": TEXTPRI, "insertcolor": TEXTPRI, "bordercolor": BORDER}),
         ("TScrollbar", {"background": PANELBG, "troughcolor": DARKBG, "arrowcolor": TEXTSEC, "bordercolor": BORDER}),
         ("TPanedwindow", {"background": DARKBG}),
         ("TSeparator", {"background": BORDER}),
-        ("TNotebook",  {"background": DARKBG, "bordercolor": BORDER}),
+        ("TNotebook", {"background": DARKBG, "bordercolor": BORDER}),
         ("TNotebook.Tab", {"background": PANELBG, "foreground": TEXTSEC, "padding": (10, 4), "bordercolor": BORDER}),
-        ("Treeview",  {
-            "background": PANELBG, "foreground": TEXTPRI,
-            "fieldbackground": PANELBG, "bordercolor": BORDER, "rowheight": 22,
-        }),
-        ("Treeview.Heading", {
-            "background": DARKBG, "foreground": ACCENT,
-            "bordercolor": BORDER, "font": ("Segoe UI", 9, "bold"),
-        }),
-        ("Status.TLabel", {
-            "background": "#0d1117", "foreground": TEXTSEC,
-            "font": ("Consolas", 8), "padding": (4, 2),
-        }),
+        (
+            "Treeview",
+            {
+                "background": PANELBG,
+                "foreground": TEXTPRI,
+                "fieldbackground": PANELBG,
+                "bordercolor": BORDER,
+                "rowheight": 22,
+            },
+        ),
+        (
+            "Treeview.Heading",
+            {
+                "background": DARKBG,
+                "foreground": ACCENT,
+                "bordercolor": BORDER,
+                "font": ("Segoe UI", 9, "bold"),
+            },
+        ),
+        (
+            "Status.TLabel",
+            {
+                "background": "#0d1117",
+                "foreground": TEXTSEC,
+                "font": ("Consolas", 8),
+                "padding": (4, 2),
+            },
+        ),
     ]:
         style.configure(widget, **opts)
 
-    style.map("TButton",
+    style.map(
+        "TButton",
         background=[("active", BORDER), ("disabled", DARKBG)],
         foreground=[("disabled", TEXTMUTED)],
     )
     style.map("TCheckbutton", background=[("active", DARKBG)])
     style.map("TRadiobutton", background=[("active", DARKBG)])
-    style.map("TCombobox",
+    style.map(
+        "TCombobox",
         fieldbackground=[("readonly", PANELBG)],
         selectbackground=[("readonly", PANELBG)],
         selectforeground=[("readonly", TEXTPRI)],
     )
-    style.map("TNotebook.Tab",
+    style.map(
+        "TNotebook.Tab",
         background=[("selected", DARKBG)],
         foreground=[("selected", ACCENT)],
     )
-    style.map("Treeview",
+    style.map(
+        "Treeview",
         background=[("selected", ACCENT)],
         foreground=[("selected", DARKBG)],
     )
 
     # Progressbary (Canvas) — per-name style
     for name, fill in [
-        ("copy",   "#8b5cf6"),
-        ("gpu1",   GREEN),
-        ("gpu2",   ACCENT),
-        ("total",  ACCENT2),
-        ("grey",   TEXTMUTED),
+        ("copy", "#8b5cf6"),
+        ("gpu1", GREEN),
+        ("gpu2", ACCENT),
+        ("total", ACCENT2),
+        ("grey", TEXTMUTED),
     ]:
         style.configure(
             f"{name}.Horizontal.TProgressbar",
-            troughcolor=PANELBG, background=fill,
-            bordercolor=BORDER, darkcolor=fill, lightcolor=fill,
+            troughcolor=PANELBG,
+            background=fill,
+            bordercolor=BORDER,
+            darkcolor=fill,
+            lightcolor=fill,
         )
 
 
@@ -120,6 +158,10 @@ def redraw_bar(canvas: tk.Canvas, pct: float, text: str, color: str) -> None:
     if fill_w > 0:
         canvas.create_rectangle(0, 0, fill_w, h, fill=color, outline="")
     canvas.create_text(
-        w // 2, h // 2, text=text,
-        fill=TEXTPRI, font=("Segoe UI", 9), anchor="center",
+        w // 2,
+        h // 2,
+        text=text,
+        fill=TEXTPRI,
+        font=("Segoe UI", 9),
+        anchor="center",
     )

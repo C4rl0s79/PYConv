@@ -14,11 +14,10 @@ Zachowane 1:1:
   - Auth: cookie cpp+cppwd header
   - Cloudflare compatible (HEAD nie działa → używa ?ls)
 """
+
 from __future__ import annotations
 
 import http.client
-import os
-import socket
 import time
 import urllib.error
 import urllib.parse
@@ -33,9 +32,9 @@ from ..models.enums import UploadStatus
 
 logger = get_logger(__name__)
 
-_CHUNK_SIZE = 4 * 1024 * 1024   # 4 MB — z monolitu
-_STALL_TIMEOUT = 120            # sekund bez danych → uznaj za zawieszone
-_CONN_TIMEOUT = 300             # timeout TCP połączenia
+_CHUNK_SIZE = 4 * 1024 * 1024  # 4 MB — z monolitu
+_STALL_TIMEOUT = 120  # sekund bez danych → uznaj za zawieszone
+_CONN_TIMEOUT = 300  # timeout TCP połączenia
 
 
 class CopypartyClient:
@@ -77,7 +76,7 @@ class CopypartyClient:
         if parsed.query:
             path = f"{path}?{parsed.query}"
 
-        logger.info(f"[{job_id}] Upload HTTP PUT {dest_url} ({file_size/1024/1024:.1f} MB)")
+        logger.info(f"[{job_id}] Upload HTTP PUT {dest_url} ({file_size / 1024 / 1024:.1f} MB)")
 
         try:
             conn = (
@@ -171,7 +170,7 @@ class CopypartyClient:
                 if sock:
                     try:
                         # per-chunk stall watchdog
-                        import socket as _sock
+
                         resp.fp.raw._sock.settimeout(30)
                     except Exception:
                         pass
@@ -231,9 +230,7 @@ class CopypartyClient:
 
         remote_size = self.get_remote_size(dir_url, filename)
         if remote_size <= 0 or remote_size < local_size * 0.99:
-            logger.error(
-                f"[{job_id}] Size mismatch: remote={remote_size} local={local_size}"
-            )
+            logger.error(f"[{job_id}] Size mismatch: remote={remote_size} local={local_size}")
             return UploadResult(
                 UploadStatus.SIZE_MISMATCH,
                 local_size=local_size,
@@ -247,9 +244,7 @@ class CopypartyClient:
             if remote_sha:
                 local_sha = sha256_file(local_path)
                 if local_sha != remote_sha:
-                    logger.error(
-                        f"[{job_id}] SHA mismatch: local={local_sha[:16]} remote={remote_sha[:16]}"
-                    )
+                    logger.error(f"[{job_id}] SHA mismatch: local={local_sha[:16]} remote={remote_sha[:16]}")
                     return UploadResult(
                         UploadStatus.SHA_MISMATCH,
                         local_size=local_size,
@@ -304,9 +299,7 @@ class CopypartyClient:
         """cpdelete() z monolitu — POST ?delete."""
         del_url = file_url.rstrip("/") + "?delete"
         try:
-            req = urllib.request.Request(
-                del_url, data=b"", method="POST", headers=self._headers()
-            )
+            req = urllib.request.Request(del_url, data=b"", method="POST", headers=self._headers())
             with urllib.request.urlopen(req, timeout=15) as r:
                 return r.status in (200, 204)
         except Exception as e:
@@ -332,7 +325,7 @@ class CopypartyClient:
         """Auth headers — cookie cpp + cppwd fallback."""
         hdrs = {}
         if self.password:
-            import base64
+
             hdrs["Cookie"] = f"cppwd={self.password}"
             hdrs["PW"] = self.password  # fallback header z monolitu
         return hdrs
@@ -341,6 +334,7 @@ class CopypartyClient:
     def _read_json(response) -> dict:
         """Czyta JSON z urllib response."""
         import json
+
         raw = response.read()
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8", errors="replace")

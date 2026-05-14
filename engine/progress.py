@@ -5,6 +5,7 @@ Thread-safe. Zachowana 1:1 logika z monolitu:
   - NETWORK: 1 slot = 3 fazy (copyin 0-33, convert 33-66, copyout 66-100)
 Dwa GPU piszą równocześnie do peaks[], lock chroni sumę.
 """
+
 from __future__ import annotations
 import threading
 

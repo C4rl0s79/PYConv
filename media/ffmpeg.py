@@ -13,20 +13,19 @@ Zachowane 1:1:
   - NAL error detect / rawvideo error detect
   - timeout: probe=15s, repair=300s, encode bez limitu (wielogodzinne)
 """
+
 from __future__ import annotations
 
 import subprocess
 import threading
-import time
-import os
 from pathlib import Path
-from typing import Callable, Iterator, List, Optional, Tuple
+from typing import Callable, List, Optional
 
 from ..utils.subprocess_utils import ffmpeg_popen, iter_ffmpeg_lines, run_cmd, NOWINDOW
 from ..utils.logging_utils import get_logger
 from ..utils.filename import safe_filename
 from ..utils.hashing import rm_silent
-from ..models.enums import EncoderType, RepairMode
+from ..models.enums import EncoderType
 from ..models.job_info import EncodeResult
 from ..models.media_info import MediaInfo
 
@@ -34,40 +33,50 @@ logger = get_logger(__name__)
 
 # Tablice CQ/GQ z monolitu — zachowane 1:1
 CQBASE: dict[str, dict[int, int]] = {
-    "av1nvenc":  {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
+    "av1nvenc": {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
     "hevcnvenc": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "av1qsv":    {2160: 20, 1440: 18, 1080: 16, 720: 14, 0: 12},
-    "hevcqsv":   {2160: 25, 1440: 23, 1080: 21, 720: 19, 0: 18},
-    "av1amf":    {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "hevcamf":   {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
-    "libx265":   {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
+    "av1qsv": {2160: 20, 1440: 18, 1080: 16, 720: 14, 0: 12},
+    "hevcqsv": {2160: 25, 1440: 23, 1080: 21, 720: 19, 0: 18},
+    "av1amf": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "hevcamf": {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
+    "libx265": {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
     "libsvtav1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "libaom-av1":{2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "libaom-av1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
 }
 CQMAX: dict[str, int] = {
-    "av1nvenc": 51, "hevcnvenc": 51,
-    "av1qsv": 51, "hevcqsv": 51,
-    "av1amf": 51, "hevcamf": 51,
-    "libx265": 51, "libaom-av1": 63, "libsvtav1": 63,
+    "av1nvenc": 51,
+    "hevcnvenc": 51,
+    "av1qsv": 51,
+    "hevcqsv": 51,
+    "av1amf": 51,
+    "hevcamf": 51,
+    "libx265": 51,
+    "libaom-av1": 63,
+    "libsvtav1": 63,
 }
 
 # Kody błędów z monolitu
 _NAL_ERRORS = [
-    "nal", "h264", "hevc", "invalid nalu",
-    "error while decoding", "sps nal unit", "no frame!",
+    "nal",
+    "h264",
+    "hevc",
+    "invalid nalu",
+    "error while decoding",
+    "sps nal unit",
+    "no frame!",
 ]
 _RAWVIDEO_ERRORS = ["decrawvideo", "rawvideo"]
 
 # Chains fallbacków z monolitu — zachowane 1:1
 _FALLBACK_CHAINS: dict[str, list[tuple[str, bool]]] = {
-    "av1nvenc":  [("av1nvenc", False), ("av1nvenc", True), ("av1qsv", True), ("libsvtav1", False)],
-    "av1qsv":   [("av1qsv", False), ("av1qsv", True), ("av1nvenc", True), ("libsvtav1", False)],
+    "av1nvenc": [("av1nvenc", False), ("av1nvenc", True), ("av1qsv", True), ("libsvtav1", False)],
+    "av1qsv": [("av1qsv", False), ("av1qsv", True), ("av1nvenc", True), ("libsvtav1", False)],
     "hevcnvenc": [("hevcnvenc", False), ("hevcnvenc", True), ("hevcqsv", True), ("libx265", False)],
-    "hevcqsv":  [("hevcqsv", False), ("hevcqsv", True), ("hevcnvenc", True), ("libx265", False)],
-    "av1amf":   [("av1amf", False), ("av1amf", True), ("av1nvenc", True), ("libsvtav1", False)],
-    "hevcamf":  [("hevcamf", False), ("hevcamf", True), ("hevcnvenc", True), ("libx265", False)],
+    "hevcqsv": [("hevcqsv", False), ("hevcqsv", True), ("hevcnvenc", True), ("libx265", False)],
+    "av1amf": [("av1amf", False), ("av1amf", True), ("av1nvenc", True), ("libsvtav1", False)],
+    "hevcamf": [("hevcamf", False), ("hevcamf", True), ("hevcnvenc", True), ("libx265", False)],
     "libsvtav1": [("libsvtav1", False)],
-    "libx265":   [("libx265", False)],
+    "libx265": [("libx265", False)],
 }
 
 
@@ -81,7 +90,7 @@ class FFmpegEngine:
         self,
         ffmpeg_bin: str = "ffmpeg",
         ffprobe_bin: str = "ffprobe",
-        cancel_flag=None,     # threading.Event — opcjonalny
+        cancel_flag=None,  # threading.Event — opcjonalny
         log_callback: Optional[Callable[[str, str], None]] = None,
     ):
         self.ffmpeg_bin = ffmpeg_bin
@@ -121,11 +130,17 @@ class FFmpegEngine:
             enc = EncoderType(enc_str)
             lbl = f"{enc_str}{'(SW)' if swdec else ''}"
             if attempt > 0:
-                self._log(f"[{job_id}] Fallback {attempt}/{n-1}: {lbl}", "WARN")
+                self._log(f"[{job_id}] Fallback {attempt}/{n - 1}: {lbl}", "WARN")
 
             ok = self._run_single(
-                src, dst, enc, cq, job_id, duration,
-                swdec=swdec, info=info,
+                src,
+                dst,
+                enc,
+                cq,
+                job_id,
+                duration,
+                swdec=swdec,
+                info=info,
                 on_progress=on_progress,
                 stderr_out=last_stderr,
             )
@@ -145,8 +160,15 @@ class FFmpegEngine:
                 repaired = self.repair_annexb(src, job_id)
                 if repaired:
                     ok2 = self._run_single(
-                        repaired, dst, enc, cq, job_id, duration,
-                        swdec=swdec, info=info, on_progress=on_progress,
+                        repaired,
+                        dst,
+                        enc,
+                        cq,
+                        job_id,
+                        duration,
+                        swdec=swdec,
+                        info=info,
+                        on_progress=on_progress,
                     )
                     rm_silent(repaired)
                     if ok2 and dst.exists():
@@ -161,8 +183,15 @@ class FFmpegEngine:
                 repaired = self.repair_fourcc(src, job_id)
                 if repaired:
                     ok2 = self._run_single(
-                        repaired, dst, enc, cq, job_id, duration,
-                        swdec=swdec, info=info, on_progress=on_progress,
+                        repaired,
+                        dst,
+                        enc,
+                        cq,
+                        job_id,
+                        duration,
+                        swdec=swdec,
+                        info=info,
+                        on_progress=on_progress,
                     )
                     rm_silent(repaired)
                     if ok2 and dst.exists():
@@ -184,11 +213,23 @@ class FFmpegEngine:
         # Wariant 1: extractextradata (SPSPPS inline per keyframe)
         rep1 = tmpdir / f"{stem}_annexb_rep1_{job_id}.mkv"
         cmd1 = [
-            self.ffmpeg_bin, "-y", "-fflags", "genpts+igndts",
-            "-i", str(src),
-            "-c:v", "copy", "-c:a", "copy", "-c:s", "copy",
-            "-bsf:v", "extract_annexb",
-            "-f", "matroska", str(rep1),
+            self.ffmpeg_bin,
+            "-y",
+            "-fflags",
+            "genpts+igndts",
+            "-i",
+            str(src),
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            "-c:s",
+            "copy",
+            "-bsf:v",
+            "extract_annexb",
+            "-f",
+            "matroska",
+            str(rep1),
         ]
         self._log(f"[{job_id}] Repair AnnexB variant 1", "WARN")
         _, _, rc1 = run_cmd(cmd1, timeout=300)
@@ -199,12 +240,23 @@ class FFmpegEngine:
         # Wariant 2: discardcorrupt + ignore_err
         rep2 = tmpdir / f"{stem}_annexb_rep2_{job_id}.mkv"
         cmd2 = [
-            self.ffmpeg_bin, "-y",
-            "-fflags", "genpts+igndts+discardcorrupt",
-            "-err_detect", "ignore_err",
-            "-i", str(src),
-            "-c:v", "copy", "-c:a", "copy", "-c:s", "copy",
-            "-f", "matroska", str(rep2),
+            self.ffmpeg_bin,
+            "-y",
+            "-fflags",
+            "genpts+igndts+discardcorrupt",
+            "-err_detect",
+            "ignore_err",
+            "-i",
+            str(src),
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            "-c:s",
+            "copy",
+            "-f",
+            "matroska",
+            str(rep2),
         ]
         self._log(f"[{job_id}] Repair AnnexB variant 2 (ignore_err)", "WARN")
         _, _, rc2 = run_cmd(cmd2, timeout=300)
@@ -223,9 +275,19 @@ class FFmpegEngine:
         # Wariant 1: remux AVI → MKV (strip FOURCC, ffmpeg autodetect)
         rep1 = tmpdir / f"{stem}_fourcc_rep1_{job_id}.mkv"
         cmd1 = [
-            self.ffmpeg_bin, "-y", "-fflags", "genpts+igndts",
-            "-i", str(src),
-            "-c:v", "copy", "-c:a", "copy", "-f", "matroska", str(rep1),
+            self.ffmpeg_bin,
+            "-y",
+            "-fflags",
+            "genpts+igndts",
+            "-i",
+            str(src),
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            "-f",
+            "matroska",
+            str(rep1),
         ]
         self._log(f"[{job_id}] Repair FOURCC variant 1 (remux)", "WARN")
         _, stderr1, rc1 = run_cmd(cmd1, timeout=300)
@@ -238,10 +300,21 @@ class FFmpegEngine:
         # Wariant 2: force mpeg4 decoder
         rep2 = tmpdir / f"{stem}_fourcc_rep2_{job_id}.mkv"
         cmd2 = [
-            self.ffmpeg_bin, "-y", "-fflags", "genpts+igndts",
-            "-vcodec", "mpeg4",
-            "-i", str(src),
-            "-c:v", "copy", "-c:a", "copy", "-f", "matroska", str(rep2),
+            self.ffmpeg_bin,
+            "-y",
+            "-fflags",
+            "genpts+igndts",
+            "-vcodec",
+            "mpeg4",
+            "-i",
+            str(src),
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            "-f",
+            "matroska",
+            str(rep2),
         ]
         self._log(f"[{job_id}] Repair FOURCC variant 2 (mpeg4 decoder)", "WARN")
         _, _, rc2 = run_cmd(cmd2, timeout=300)
@@ -252,13 +325,27 @@ class FFmpegEngine:
         # Wariant 3: lossless H.264 jako pośrednik
         rep3 = tmpdir / f"{stem}_fourcc_rep3_{job_id}.mkv"
         cmd3 = [
-            self.ffmpeg_bin, "-y",
-            "-fflags", "genpts+igndts+discardcorrupt",
-            "-err_detect", "ignore_err",
-            "-vcodec", "mpeg4",
-            "-i", str(src),
-            "-c:v", "libx264", "-crf", "0", "-preset", "ultrafast",
-            "-c:a", "copy", "-f", "matroska", str(rep3),
+            self.ffmpeg_bin,
+            "-y",
+            "-fflags",
+            "genpts+igndts+discardcorrupt",
+            "-err_detect",
+            "ignore_err",
+            "-vcodec",
+            "mpeg4",
+            "-i",
+            str(src),
+            "-c:v",
+            "libx264",
+            "-crf",
+            "0",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "copy",
+            "-f",
+            "matroska",
+            str(rep3),
         ]
         self._log(f"[{job_id}] Repair FOURCC variant 3 (lossless H.264)", "WARN")
         _, _, rc3 = run_cmd(cmd3, timeout=600)
@@ -278,14 +365,24 @@ class FFmpegEngine:
     ) -> Optional[float]:
         """vmafscore() z monolitu — 1:1 libvmaf filter, JSON parse."""
         import json
+
         cmd = [
-            self.ffmpeg_bin, "-v", "error",
-            "-t", str(samplesecs), "-i", str(distorted),
-            "-t", str(samplesecs), "-i", str(reference),
+            self.ffmpeg_bin,
+            "-v",
+            "error",
+            "-t",
+            str(samplesecs),
+            "-i",
+            str(distorted),
+            "-t",
+            str(samplesecs),
+            "-i",
+            str(reference),
             "-lavfi",
-            "[0:v]setpts=PTS-STARTPTS[d];[1:v]setpts=PTS-STARTPTS[r];"
-            "[d][r]libvmaf=log_fmt=json:log_path=-",
-            "-f", "null", "-",
+            "[0:v]setpts=PTS-STARTPTS[d];[1:v]setpts=PTS-STARTPTS[r];[d][r]libvmaf=log_fmt=json:log_path=-",
+            "-f",
+            "null",
+            "-",
         ]
         stdout, stderr, rc = run_cmd(cmd, timeout=300)
         blob = stdout + stderr
@@ -306,9 +403,7 @@ class FFmpegEngine:
             idx = blob.rfind("{")
             if idx >= 0:
                 data = json.loads(blob[idx:])
-                return float(
-                    data["pooled_metrics"]["vmaf"]["mean"]
-                )
+                return float(data["pooled_metrics"]["vmaf"]["mean"])
         except (ValueError, KeyError, json.JSONDecodeError):
             pass
 
@@ -329,19 +424,31 @@ class FFmpegEngine:
         Timeout 180s (krótki sample 30s).
         """
         info = info or MediaInfo(
-            path=src, size_bytes=0, duration_seconds=0,
-            video_codec="", bitdepth=8,
+            path=src,
+            size_bytes=0,
+            duration_seconds=0,
+            video_codec="",
+            bitdepth=8,
         )
         is_10bit = info.is_10bit
         pixfmt_args = self._pixfmt_args(encoder, is_10bit)
         q_args = self._quality_args(encoder, cq)
 
         cmd = [
-            self.ffmpeg_bin, "-y", "-v", "error",
-            "-i", str(src),
-            "-map", "0:v:0", "-an", "-sn",
-            "-c:v", encoder.value,
-            *q_args, *pixfmt_args,
+            self.ffmpeg_bin,
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(src),
+            "-map",
+            "0:v:0",
+            "-an",
+            "-sn",
+            "-c:v",
+            encoder.value,
+            *q_args,
+            *pixfmt_args,
             str(dst),
         ]
         _, stderr, rc = run_cmd(cmd, timeout=180)
@@ -369,8 +476,11 @@ class FFmpegEngine:
     ) -> bool:
         """runffmpeg() z monolitu: Popen + live stderr + progress parsing."""
         info = info or MediaInfo(
-            path=src, size_bytes=0, duration_seconds=duration,
-            video_codec="", bitdepth=8,
+            path=src,
+            size_bytes=0,
+            duration_seconds=duration,
+            video_codec="",
+            bitdepth=8,
         )
         is_10bit = info.is_10bit
         height = info.height
@@ -383,14 +493,31 @@ class FFmpegEngine:
             q_args += ["-tile-columns", "2", "-tile-rows", "2"]
 
         cmd = [
-            self.ffmpeg_bin, "-y",
+            self.ffmpeg_bin,
+            "-y",
             *swdec_args,
-            "-i", str(src),
-            "-c:v", encoder.value,
-            *q_args, *pixfmt_args, *fps_args,
-            "-c:a", "copy", "-c:s", "copy",
-            "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-map", "0:t?",
-            "-progress", "pipe:1", "-nostats",
+            "-i",
+            str(src),
+            "-c:v",
+            encoder.value,
+            *q_args,
+            *pixfmt_args,
+            *fps_args,
+            "-c:a",
+            "copy",
+            "-c:s",
+            "copy",
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-map",
+            "0:s?",
+            "-map",
+            "0:t?",
+            "-progress",
+            "pipe:1",
+            "-nostats",
             str(dst),
         ]
         self._log(f"[{job_id}] CMD: {' '.join(cmd)}", "INFO")
@@ -409,7 +536,7 @@ class FFmpegEngine:
 
                 out_us = 0
                 cancelled = False
-                for raw in (proc.stdout or []):
+                for raw in proc.stdout or []:
                     if self.cancel_flag and self.cancel_flag.is_set():
                         cancelled = True
                         try:
@@ -441,13 +568,23 @@ class FFmpegEngine:
                     return False
                 if proc.returncode != 0:
                     relevant = [
-                        l for l in stderr_lines
-                        if any(x in l.lower() for x in (
-                            "error", "invalid", "failed", "cannot",
-                            "no such", "not found", "unknown", "unsupported",
-                        ))
+                        l
+                        for l in stderr_lines
+                        if any(
+                            x in l.lower()
+                            for x in (
+                                "error",
+                                "invalid",
+                                "failed",
+                                "cannot",
+                                "no such",
+                                "not found",
+                                "unknown",
+                                "unsupported",
+                            )
+                        )
                     ]
-                    for line in (relevant[-8:] if relevant else stderr_lines[-8:]):
+                    for line in relevant[-8:] if relevant else stderr_lines[-8:]:
                         self._log(f"  ffmpeg ERR: {line}", "ERROR")
                     return False
                 return True
@@ -460,37 +597,116 @@ class FFmpegEngine:
         """Per-encoder parametry jakości z monolitu — 1:1."""
         e = encoder.value
         if e == "av1nvenc":
-            return ["-rc", "vbr", "-cq", str(cq), "-b:v", "0",
-                    "-maxrate", "0", "-preset", "p6", "-tune", "hq",
-                    "-spatial-aq", "1", "-temporal-aq", "1",
-                    "-aq-strength", "8", "-rc-lookahead", "32",
-                    "-extra_hw_frames", "64"]
+            return [
+                "-rc",
+                "vbr",
+                "-cq",
+                str(cq),
+                "-b:v",
+                "0",
+                "-maxrate",
+                "0",
+                "-preset",
+                "p6",
+                "-tune",
+                "hq",
+                "-spatial-aq",
+                "1",
+                "-temporal-aq",
+                "1",
+                "-aq-strength",
+                "8",
+                "-rc-lookahead",
+                "32",
+                "-extra_hw_frames",
+                "64",
+            ]
         if e == "hevcnvenc":
-            return ["-rc", "vbr", "-cq", str(cq), "-b:v", "0",
-                    "-maxrate", "0", "-preset", "p6", "-tune", "hq",
-                    "-spatial-aq", "1", "-temporal-aq", "1",
-                    "-aq-strength", "8", "-bf", "4", "-b_ref_mode", "middle",
-                    "-rc-lookahead", "32", "-extra_hw_frames", "64"]
+            return [
+                "-rc",
+                "vbr",
+                "-cq",
+                str(cq),
+                "-b:v",
+                "0",
+                "-maxrate",
+                "0",
+                "-preset",
+                "p6",
+                "-tune",
+                "hq",
+                "-spatial-aq",
+                "1",
+                "-temporal-aq",
+                "1",
+                "-aq-strength",
+                "8",
+                "-bf",
+                "4",
+                "-b_ref_mode",
+                "middle",
+                "-rc-lookahead",
+                "32",
+                "-extra_hw_frames",
+                "64",
+            ]
         if e == "av1qsv":
-            return ["-global_quality", str(cq), "-b:v", "0",
-                    "-preset", "slow", "-bf", "7",
-                    "-extbrc", "1", "-look_ahead", "1",
-                    "-look_ahead_depth", "40", "-max_frame_size", "0"]
+            return [
+                "-global_quality",
+                str(cq),
+                "-b:v",
+                "0",
+                "-preset",
+                "slow",
+                "-bf",
+                "7",
+                "-extbrc",
+                "1",
+                "-look_ahead",
+                "1",
+                "-look_ahead_depth",
+                "40",
+                "-max_frame_size",
+                "0",
+            ]
         if e == "hevcqsv":
-            return ["-global_quality", str(cq), "-b:v", "0",
-                    "-preset", "slow",
-                    "-bf", "8", "-b_strategy", "1", "-refs", "4",
-                    "-extbrc", "1", "-look_ahead", "1",
-                    "-look_ahead_depth", "40", "-max_frame_size", "0"]
+            return [
+                "-global_quality",
+                str(cq),
+                "-b:v",
+                "0",
+                "-preset",
+                "slow",
+                "-bf",
+                "8",
+                "-b_strategy",
+                "1",
+                "-refs",
+                "4",
+                "-extbrc",
+                "1",
+                "-look_ahead",
+                "1",
+                "-look_ahead_depth",
+                "40",
+                "-max_frame_size",
+                "0",
+            ]
         if e in ("av1amf", "hevcamf"):
             return ["-rc", "qvbr", "-qvbr_quality_level", str(cq)]
         if e == "libsvtav1":
-            return ["-crf", str(cq), "-preset", "8", "-b:v", "0",
-                    "-svtav1-params", "tune=0:enable-overlays=1:scd=1"]
+            return ["-crf", str(cq), "-preset", "8", "-b:v", "0", "-svtav1-params", "tune=0:enable-overlays=1:scd=1"]
         if e == "libx265":
-            return ["-crf", str(cq), "-preset", "slow", "-b:v", "0",
-                    "-x265-params",
-                    "aq-mode=3:aq-strength=1.0:rd=4:psy-rd=2.0:psy-rdoq=1.0"]
+            return [
+                "-crf",
+                str(cq),
+                "-preset",
+                "slow",
+                "-b:v",
+                "0",
+                "-x265-params",
+                "aq-mode=3:aq-strength=1.0:rd=4:psy-rd=2.0:psy-rdoq=1.0",
+            ]
         if e in ("libx264", "libaom-av1"):
             return ["-crf", str(cq), "-preset", "fast", "-b:v", "0"]
         return ["-cq", str(cq)]
@@ -512,11 +728,21 @@ class FFmpegEngine:
             return []
         try:
             r = subprocess.run(
-                [self.ffprobe_bin, "-v", "quiet",
-                 "-select_streams", "v:0",
-                 "-show_entries", "stream=r_frame_rate",
-                 "-of", "default=noprint_wrappers=1:nokey=1", str(src)],
-                capture_output=True, text=True, timeout=10,
+                [
+                    self.ffprobe_bin,
+                    "-v",
+                    "quiet",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=r_frame_rate",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(src),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
                 creationflags=NOWINDOW or 0,
             )
             raw = r.stdout.strip()

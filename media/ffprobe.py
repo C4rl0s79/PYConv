@@ -1,8 +1,8 @@
 """FFprobeEngine – all ffprobe knowledge in one place."""
+
 from __future__ import annotations
 import json
 import os
-from pathlib import Path
 
 from utils.subprocess_utils import run_cmd
 from utils.logging_utils import get_logger
@@ -22,8 +22,14 @@ class FFprobeEngine:
     def probe(self, path: str) -> ProbeResult:
         """Run ffprobe on *path* and return a ProbeResult."""
         cmd = [
-            "ffprobe", "-v", "quiet", "-print_format", "json",
-            "-show_streams", "-show_format", path,
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_streams",
+            "-show_format",
+            path,
         ]
         stdout, stderr, rc = run_cmd(cmd, timeout=self.TIMEOUT)
         if rc == -1:

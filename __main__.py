@@ -1,4 +1,5 @@
 """Punkt wejścia: python -m pyconv"""
+
 from pyconv.gui.app import PlexConvertApp
 
 

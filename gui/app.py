@@ -7,6 +7,7 @@ Zasada: __init__ tylko inicjuje zmienne i woła build_ui().
 Cała logika biznesowa jest w callbacks.py — metody klasy
 są cienkimi wrapperami delegującymi do modułu callbacks.
 """
+
 from __future__ import annotations
 
 import threading
@@ -25,7 +26,7 @@ from ..network.client import CopypartyClient
 class PlexConvertApp(tk.Tk):
     """Główne okno aplikacji — v4.12 refactored."""
 
-    APP_TITLE   = "Plex Convert GUI v4.12 — Copyparty"
+    APP_TITLE = "Plex Convert GUI v4.12 — Copyparty"
     APP_VERSION = "4.12"
 
     def __init__(self):
@@ -36,26 +37,29 @@ class PlexConvertApp(tk.Tk):
         self.resizable(True, True)
 
         # --- Stan aplikacji ---
-        self.files:       list[dict] = []
+        self.files: list[dict] = []
         self.cancel_flag: threading.Event = threading.Event()
-        self.ui_queue:    list = []
+        self.ui_queue: list = []
 
         # --- Blokady sieciowe ---
-        self.net_copy_lock:     threading.Lock = threading.Lock()
+        self.net_copy_lock: threading.Lock = threading.Lock()
         self.net_download_lock: threading.Lock = threading.Lock()
-        self.net_upload_lock:   threading.Lock = threading.Lock()
+        self.net_upload_lock: threading.Lock = threading.Lock()
 
         # --- Progress bars: canvas + wartości + kolory + tekst ---
         self.bar_colors: dict[str, str] = {
-            "copycv":   "#8b5cf6",
+            "copycv": "#8b5cf6",
             "uploadcv": "#e879f9",
-            "file1cv":  GREEN,
-            "file2cv":  ACCENT,
-            "totalcv":  ACCENT2,
+            "file1cv": GREEN,
+            "file2cv": ACCENT,
+            "totalcv": ACCENT2,
         }
         self.bar_text: dict[str, str] = {
-            "copycv": "", "uploadcv": "",
-            "file1cv": "", "file2cv": "", "totalcv": "",
+            "copycv": "",
+            "uploadcv": "",
+            "file1cv": "",
+            "file2cv": "",
+            "totalcv": "",
         }
         # pct atrybuty (copypct, uploadpct, ...)
         for attr in ("copypct", "uploadpct", "file1pct", "file2pct", "totalpct"):
@@ -63,16 +67,16 @@ class PlexConvertApp(tk.Tk):
 
         # --- Paleta kolorów dla callbacks ---
         self.theme_colors = {
-            "DARKBG":    DARKBG,
-            "PANELBG":   PANELBG,
-            "TEXTPRI":   TEXTPRI,
-            "TEXTSEC":   TEXTSEC,
+            "DARKBG": DARKBG,
+            "PANELBG": PANELBG,
+            "TEXTPRI": TEXTPRI,
+            "TEXTSEC": TEXTSEC,
             "TEXTMUTED": TEXTMUTED,
-            "ACCENT":    ACCENT,
+            "ACCENT": ACCENT,
         }
 
         # --- Backend ---
-        self.ffmpeg:    FFmpegEngine    = FFmpegEngine()
+        self.ffmpeg: FFmpegEngine = FFmpegEngine()
         self.cp_client: Optional[CopypartyClient] = None
 
         # --- Załaduj theme i zbuduj UI ---
@@ -109,7 +113,8 @@ class PlexConvertApp(tk.Tk):
     def log_msg(self, msg: str, level: str = "INFO") -> None:
         """Wątek-bezpieczne logowanie do ScrolledText."""
         from datetime import datetime
-        ts   = datetime.now().strftime("%H:%M:%S")
+
+        ts = datetime.now().strftime("%H:%M:%S")
         full = f"{ts}  {msg}\n"
 
         def do():
@@ -120,44 +125,86 @@ class PlexConvertApp(tk.Tk):
                 self.log.configure(state="disabled")
             except Exception:
                 pass
+
         self.ui(do)
 
     # ------------------------------------------------------------------
     # Cienkiewrappery → callbacks.py
     # ------------------------------------------------------------------
 
-    def start_scan(self)    -> None: cb.start_scan(self)
-    def start_convert(self) -> None: cb.start_convert(self)
-    def cancel(self)        -> None: cb.cancel(self)
-    def clear(self)         -> None: cb.clear(self)
-    def browse_src(self)    -> None: cb.browse_src(self)
-    def refresh_free(self)  -> None: cb.refresh_free(self)
-    def select_all(self)    -> None: cb.select_all(self)
-    def deselect_all(self)  -> None: cb.deselect_all(self)
-    def sort_tree(self, col)-> None: cb.sort_tree(self, col)
-    def on_tree_click(self, event) -> None: cb.on_tree_click(self, event)
+    def start_scan(self) -> None:
+        cb.start_scan(self)
 
-    def on_gpu2_toggle(self)       -> None: cb.on_gpu2_toggle(self)
-    def on_auto_cq_toggle(self)    -> None: cb.on_auto_cq_toggle(self)
-    def on_hq_toggle(self)         -> None: cb.on_hq_toggle(self)
-    def on_vmaf_toggle(self)       -> None: cb.on_vmaf_toggle(self)
-    def on_network_toggle(self)    -> None: cb.on_network_toggle(self)
-    def on_qsv_profile_change(self)-> None: cb.on_qsv_profile_change(self)
-    def on_anime_mode_change(self) -> None: cb.on_anime_mode_change(self)
-    def on_copyparty_toggle(self)  -> None: cb.on_copyparty_toggle(self)
+    def start_convert(self) -> None:
+        cb.start_convert(self)
 
-    def cp_do_login(self)         -> None: self._cp_do_login()
-    def cp_browse(self)           -> None: self._cp_browse()
-    def cp_refresh_cf(self)       -> None: self._cp_refresh_cf()
-    def cp_browser_fallback_login(self) -> None: self._cp_browser_fallback_login()
+    def cancel(self) -> None:
+        cb.cancel(self)
+
+    def clear(self) -> None:
+        cb.clear(self)
+
+    def browse_src(self) -> None:
+        cb.browse_src(self)
+
+    def refresh_free(self) -> None:
+        cb.refresh_free(self)
+
+    def select_all(self) -> None:
+        cb.select_all(self)
+
+    def deselect_all(self) -> None:
+        cb.deselect_all(self)
+
+    def sort_tree(self, col) -> None:
+        cb.sort_tree(self, col)
+
+    def on_tree_click(self, event) -> None:
+        cb.on_tree_click(self, event)
+
+    def on_gpu2_toggle(self) -> None:
+        cb.on_gpu2_toggle(self)
+
+    def on_auto_cq_toggle(self) -> None:
+        cb.on_auto_cq_toggle(self)
+
+    def on_hq_toggle(self) -> None:
+        cb.on_hq_toggle(self)
+
+    def on_vmaf_toggle(self) -> None:
+        cb.on_vmaf_toggle(self)
+
+    def on_network_toggle(self) -> None:
+        cb.on_network_toggle(self)
+
+    def on_qsv_profile_change(self) -> None:
+        cb.on_qsv_profile_change(self)
+
+    def on_anime_mode_change(self) -> None:
+        cb.on_anime_mode_change(self)
+
+    def on_copyparty_toggle(self) -> None:
+        cb.on_copyparty_toggle(self)
+
+    def cp_do_login(self) -> None:
+        self._cp_do_login()
+
+    def cp_browse(self) -> None:
+        self._cp_browse()
+
+    def cp_refresh_cf(self) -> None:
+        self._cp_refresh_cf()
+
+    def cp_browser_fallback_login(self) -> None:
+        self._cp_browser_fallback_login()
 
     # ------------------------------------------------------------------
     # Copyparty login helpers (GUI-specificzne, zostają w app)
     # ------------------------------------------------------------------
 
     def _cp_do_login(self) -> None:
-        url  = getattr(self, "cp_src_url", None)
-        pw   = getattr(self, "cp_password", None)
+        url = getattr(self, "cp_src_url", None)
+        pw = getattr(self, "cp_password", None)
         if not url or not pw:
             return
         self.cp_client = CopypartyClient(url.get().strip(), pw.get())
@@ -173,14 +220,16 @@ class PlexConvertApp(tk.Tk):
         self.log_msg(f"Copyparty login: {status}", "INFO")
         if ok and getattr(self, "cp_remember", None) and self.cp_remember.get():
             from ..utils.json_utils import cfg_save, cfg_load
+
             d = cfg_load() or {}
             d["cppassword"] = pw.get()
             cfg_save(d)
 
     def _cp_browse(self) -> None:
         from .dialogs import CopypartyBrowserDialog
+
         base = getattr(self, "cp_src_url", None)
-        pw   = getattr(self, "cp_password", None)
+        pw = getattr(self, "cp_password", None)
         if not base:
             return
         chosen = CopypartyBrowserDialog.ask(self, base.get().strip(), pw.get() if pw else "")
@@ -196,6 +245,7 @@ class PlexConvertApp(tk.Tk):
         """Odświeżenie tokenu cfclearance — dialog jak w monolicie."""
         import tkinter as tk2
         from tkinter import ttk as ttk2
+
         dlg = tk2.Toplevel(self)
         dlg.title("Odśwież cfclearance")
         dlg.geometry("480x160")
@@ -215,16 +265,17 @@ class PlexConvertApp(tk.Tk):
             cf = cf_var.get().strip()
             if cf and self.cp_client:
                 self.cp_client.set_cf_clearance(cf)
-                self.log_msg(f"CF odświeżony.", "INFO")
+                self.log_msg("CF odświeżony.", "INFO")
             dlg.destroy()
 
         btn_row = ttk2.Frame(dlg)
         btn_row.pack(pady=(0, 8))
-        ttk2.Button(btn_row, text="OK",     command=confirm).pack(side=tk2.LEFT, padx=4)
+        ttk2.Button(btn_row, text="OK", command=confirm).pack(side=tk2.LEFT, padx=4)
         ttk2.Button(btn_row, text="Anuluj", command=dlg.destroy).pack(side=tk2.LEFT, padx=4)
 
     def _cp_browser_fallback_login(self) -> None:
         import webbrowser
+
         url = getattr(self, "cp_src_url", None)
         if url:
             webbrowser.open(url.get().strip())

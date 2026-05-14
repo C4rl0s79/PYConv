@@ -1,11 +1,13 @@
 """EncodeResult, UploadResult, GPUInfo dataclasses."""
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from .enums import UploadStatus
 
 
 @dataclass
 class EncodeResult:
     """Result of a single ffmpeg encode pass."""
+
     success: bool = False
     output_path: str = ""
     output_size: int = 0
@@ -15,7 +17,7 @@ class EncodeResult:
     cq_used: int = 0
     vmaf_score: float = -1.0
     error_msg: str = ""
-    stderr_tail: str = ""       # last N lines of ffmpeg stderr for diagnostics
+    stderr_tail: str = ""  # last N lines of ffmpeg stderr for diagnostics
 
     @property
     def size_ratio(self) -> float:
@@ -27,6 +29,7 @@ class EncodeResult:
 @dataclass
 class UploadResult:
     """Result of a Copyparty upload."""
+
     status: UploadStatus = UploadStatus.PENDING
     remote_size: int = 0
     local_size: int = 0
@@ -42,9 +45,10 @@ class UploadResult:
 @dataclass
 class GPUInfo:
     """Describes a single GPU worker slot."""
+
     index: int = 0
     label: str = "GPU1"
     encoder: str = "av1_nvenc"
     cq: int = 32
-    download_lock_id: int = 0   # id() of the per-GPU download threading.Lock
+    download_lock_id: int = 0  # id() of the per-GPU download threading.Lock
     active: bool = True

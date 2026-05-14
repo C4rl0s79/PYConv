@@ -5,9 +5,14 @@ from .hashing import sha256_file, rm_silent
 from .timers import Timer
 
 __all__ = [
-    "setup_logger", "get_logger",
-    "ffmpeg_popen", "iter_ffmpeg_lines", "run_cmd",
-    "safe_filename", "norm_path",
-    "sha256_file", "rm_silent",
+    "setup_logger",
+    "get_logger",
+    "ffmpeg_popen",
+    "iter_ffmpeg_lines",
+    "run_cmd",
+    "safe_filename",
+    "norm_path",
+    "sha256_file",
+    "rm_silent",
     "Timer",
 ]

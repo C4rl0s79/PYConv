@@ -13,6 +13,7 @@ zwalnia slot → maks. 2 pliki lokalne na raz (1 pobrany + 1 enkodowany).
 Dwa GPU: wspólny workqueue, każdy ma własny downloadlock (równoległe
 pobieranie), wspólny upload_lock (serializacja — serwer nie przeciążony).
 """
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,7 @@ TMPSUFFIX = "__PYCONVTMP"
 @dataclass
 class PipelineConfig:
     """Konfiguracja pipeline — jeden per GPU."""
+
     encoder: EncoderType
     gpu_label: str
     cq: Optional[int]
@@ -103,9 +105,15 @@ class SequentialWorker:
             _tmp_out_ref: list = [None]
             _local_src_ref: list = [local_src]
 
-            def cleanup_tmp(restore_original: bool = False,
-                            _t=_tmp_out_ref, _l=_local_src_ref,
-                            _sp=src_path, _fn=fname, _lb=label, _cfg=cfg):
+            def cleanup_tmp(
+                restore_original: bool = False,
+                _t=_tmp_out_ref,
+                _l=_local_src_ref,
+                _sp=src_path,
+                _fn=fname,
+                _lb=label,
+                _cfg=cfg,
+            ):
                 for p in [_t[0], (_l[0] if _l[0] != _sp else None)]:
                     if p and p.exists():
                         if restore_original and p == _l[0] and _cfg.use_copyparty:
@@ -120,15 +128,23 @@ class SequentialWorker:
             file_cq = cfg.cq
             if file_cq is None:
                 mi = MediaInfo(
-                    path=src_path, size_bytes=src_size, duration_seconds=duration,
+                    path=src_path,
+                    size_bytes=src_size,
+                    duration_seconds=duration,
                     video_codec=info.get("codec", "h264"),
-                    height=info.get("height", 1080), width=info.get("width", 0),
-                    fps=info.get("fps", 0.0), bitrate_kbps=info.get("bitratekbps", 0.0),
+                    height=info.get("height", 1080),
+                    width=info.get("width", 0),
+                    fps=info.get("fps", 0.0),
+                    bitrate_kbps=info.get("bitratekbps", 0.0),
                     bitdepth=info.get("bitdepth", 8),
                 )
                 file_cq = self.cq_selector.auto_cq(
-                    cfg.encoder, mi.height, mi.bitrate_kbps,
-                    mi.width, mi.fps, mi.video_codec,
+                    cfg.encoder,
+                    mi.height,
+                    mi.bitrate_kbps,
+                    mi.width,
+                    mi.fps,
+                    mi.video_codec,
                 )
             logger.info(f"[{label}] CQ={file_cq} {fname}")
             self.on_row_update(info.get("rowid"), status=f"{label} CQ={file_cq}", gpu=label)
@@ -138,7 +154,7 @@ class SequentialWorker:
 
             def upd_convert(pct: float, _i=_idx, _tot=_total):
                 t = self.tracker.update(_i, "convert", pct)
-                self.on_progress_update(t, f"Plik {_i+1}/{_tot} konwersja {pct:.0f}%")
+                self.on_progress_update(t, f"Plik {_i + 1}/{_tot} konwersja {pct:.0f}%")
 
             if cfg.hq_mode and cfg.cq is None:
                 try:
@@ -152,15 +168,17 @@ class SequentialWorker:
             if cfg.hq_mode and cfg.vmaf_target > 0 and cfg.cq is None and duration >= 60:
                 try:
                     found = self.cq_selector.vmaf_target_search(
-                        local_src, cfg.encoder, file_cq, duration,
-                        cfg.vmaf_target, label, cfg.tmpdir,
+                        local_src,
+                        cfg.encoder,
+                        file_cq,
+                        duration,
+                        cfg.vmaf_target,
+                        label,
+                        cfg.tmpdir,
                     )
                     if found:
                         file_cq = found
-                        self.on_row_update(
-                            info.get("rowid"),
-                            status=f"{label} CQ={file_cq} VMAF={cfg.vmaf_target:.0f}"
-                        )
+                        self.on_row_update(info.get("rowid"), status=f"{label} CQ={file_cq} VMAF={cfg.vmaf_target:.0f}")
                 except Exception as e:
                     logger.warning(f"[{label}] VMAF search błąd: {e}")
 
@@ -168,9 +186,14 @@ class SequentialWorker:
             _tmp_out_ref[0] = tmp_out
 
             from ..models.encode_result import EncodeResult  # noqa: F401 (type hint)
+
             result = self.ffmpeg.run_encode_with_fallback(
-                local_src, tmp_out, cfg.encoder, file_cq,
-                job_id=label, duration=duration,
+                local_src,
+                tmp_out,
+                cfg.encoder,
+                file_cq,
+                job_id=label,
+                duration=duration,
                 on_progress=upd_convert,
             )
 
@@ -191,14 +214,16 @@ class SequentialWorker:
             if new_size > src_size:
                 grow = int((new_size - src_size) / src_size * 100)
                 logger.info(f"[{label}] Pominięto BIGGER +{grow}%: {fname}")
-                self.on_row_update(info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%")
+                self.on_row_update(
+                    info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%"
+                )
                 cleanup_tmp()
                 work_queue.task_done()
                 continue
 
             if savings < cfg.min_savings:
                 pcts = int(savings * 100)
-                logger.info(f"[{label}] Pominięto oszczędność {pcts}% < min={int(cfg.min_savings*100)}%: {fname}")
+                logger.info(f"[{label}] Pominięto oszczędność {pcts}% < min={int(cfg.min_savings * 100)}%: {fname}")
                 self.on_row_update(info.get("rowid"), status=f"Pominięto {pcts}%", tag="skip", savings=f"{pcts}%")
                 cleanup_tmp()
                 work_queue.task_done()
@@ -301,7 +326,7 @@ class PipelineWorker:
 
                 def upd_copy(pct: float, spd: float = 0.0, _i=_idx, _t=_tot):
                     t = self.tracker.update(_i, "copyin", pct)
-                    self.on_progress_update(t, f"Plik {_i+1}/{_t} pobieranie {pct:.0f}%")
+                    self.on_progress_update(t, f"Plik {_i + 1}/{_t} pobieranie {pct:.0f}%")
 
                 prefetch_sem.acquire()
                 if cfg.cancel_flag and cfg.cancel_flag.is_set():
@@ -314,9 +339,7 @@ class PipelineWorker:
                     self.on_row_update(info.get("rowid"), status="Pobieranie HTTP")
                     dl_lock = cfg.download_lock or threading.Lock()
                     with dl_lock:
-                        ok = self.cp.download_file(
-                            src_path, local_src, src_size, label, on_progress=upd_copy
-                        )
+                        ok = self.cp.download_file(src_path, local_src, src_size, label, on_progress=upd_copy)
                 else:
                     copy_lock = cfg.copy_lock or threading.Lock()
                     with copy_lock:
@@ -355,20 +378,28 @@ class PipelineWorker:
 
                 def upd_convert(pct: float, _i=_idx, _t=_tot):
                     t = self.tracker.update(_i, "convert", pct)
-                    self.on_progress_update(t, f"Plik {_i+1}/{_t} konwersja {pct:.0f}%")
+                    self.on_progress_update(t, f"Plik {_i + 1}/{_t} konwersja {pct:.0f}%")
 
                 file_cq = cfg.cq
                 if file_cq is None:
                     mi = MediaInfo(
-                        path=local_src, size_bytes=src_size, duration_seconds=duration,
+                        path=local_src,
+                        size_bytes=src_size,
+                        duration_seconds=duration,
                         video_codec=info.get("codec", "h264"),
-                        height=info.get("height", 1080), width=info.get("width", 0),
-                        fps=info.get("fps", 0.0), bitrate_kbps=info.get("bitratekbps", 0.0),
+                        height=info.get("height", 1080),
+                        width=info.get("width", 0),
+                        fps=info.get("fps", 0.0),
+                        bitrate_kbps=info.get("bitratekbps", 0.0),
                         bitdepth=info.get("bitdepth", 8),
                     )
                     file_cq = self.cq_selector.auto_cq(
-                        cfg.encoder, mi.height, mi.bitrate_kbps,
-                        mi.width, mi.fps, mi.video_codec,
+                        cfg.encoder,
+                        mi.height,
+                        mi.bitrate_kbps,
+                        mi.width,
+                        mi.fps,
+                        mi.video_codec,
                     )
                 logger.info(f"[{label}] CQ={file_cq} {fname}")
                 self.on_row_update(info.get("rowid"), status=f"{label} CQ={file_cq}", gpu=label)
@@ -385,8 +416,13 @@ class PipelineWorker:
                 if cfg.hq_mode and cfg.vmaf_target > 0 and cfg.cq is None and duration >= 60:
                     try:
                         found = self.cq_selector.vmaf_target_search(
-                            local_src, cfg.encoder, file_cq, duration,
-                            cfg.vmaf_target, label, cfg.tmpdir,
+                            local_src,
+                            cfg.encoder,
+                            file_cq,
+                            duration,
+                            cfg.vmaf_target,
+                            label,
+                            cfg.tmpdir,
                         )
                         if found:
                             file_cq = found
@@ -394,8 +430,12 @@ class PipelineWorker:
                         logger.warning(f"[{label}] VMAF search błąd: {e}")
 
                 result = self.ffmpeg.run_encode_with_fallback(
-                    local_src, tmp_out, cfg.encoder, file_cq,
-                    job_id=label, duration=duration,
+                    local_src,
+                    tmp_out,
+                    cfg.encoder,
+                    file_cq,
+                    job_id=label,
+                    duration=duration,
                     on_progress=upd_convert,
                 )
 
@@ -417,7 +457,9 @@ class PipelineWorker:
                 if new_size > src_size:
                     grow = int((new_size - src_size) / src_size * 100)
                     logger.info(f"[{label}] Pominięto BIGGER +{grow}%: {fname}")
-                    self.on_row_update(info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%")
+                    self.on_row_update(
+                        info.get("rowid"), status=f"Pominięto +{grow}% większy", tag="skip", savings=f"+{grow}%"
+                    )
                     rm_silent(tmp_out)
                     rm_silent(local_src)
                     work_queue.task_done()
@@ -437,7 +479,7 @@ class PipelineWorker:
 
                 def upd_out(pct: float, spd: float = 0.0, _i=_idx2, _t=_tot2):
                     t = self.tracker.update(_i, "copyout", pct)
-                    self.on_progress_update(t, f"Plik {_i+1}/{_t} upload {pct:.0f}%")
+                    self.on_progress_update(t, f"Plik {_i + 1}/{_t} upload {pct:.0f}%")
 
                 upload_q.put((idx, info, tmp_out, local_src, src_path, fname, new_size, savings, file_cq, upd_out))
 
@@ -457,8 +499,10 @@ class PipelineWorker:
                     except Exception:
                         vmaf_val = 0.0
                     entry = {
-                        "fname": fname, "encoder": cfg.encoder.value,
-                        "gpu": label, "cq": file_cq,
+                        "fname": fname,
+                        "encoder": cfg.encoder.value,
+                        "gpu": label,
+                        "cq": file_cq,
                         "srcsizemb": round(info.get("size", 0) / 1024 / 1024, 2),
                         "outsizemb": round(new_size / 1024 / 1024, 2),
                         "savingspct": int(savings * 100),
@@ -468,7 +512,9 @@ class PipelineWorker:
                         self.test_results.append(entry)
                     pcts = int(savings * 100)
                     logger.info(f"[{label}] TEST VMAF={vmaf_val:.2f} -{pcts}% CQ={file_cq}: {fname}")
-                    self.on_row_update(info.get("rowid"), status=f"VMAF={vmaf_val:.2f} -{pcts}%", tag="done", savings=f"-{pcts}%")
+                    self.on_row_update(
+                        info.get("rowid"), status=f"VMAF={vmaf_val:.2f} -{pcts}%", tag="done", savings=f"-{pcts}%"
+                    )
                     upd_out(100)
                     work_queue.task_done()
                     continue
@@ -484,9 +530,7 @@ class PipelineWorker:
                     ul_lock = cfg.upload_lock or threading.Lock()
                     with ul_lock:
                         file_url = f"{dir_url}/{out_fname}"
-                        up_result = self.cp.upload_file(
-                            tmp_out, file_url, label, on_progress=upd_out
-                        )
+                        up_result = self.cp.upload_file(tmp_out, file_url, label, on_progress=upd_out)
                     if not up_result.ok and up_result.status.value != "in_progress":
                         logger.warning(f"[{label}] Błąd upload: {out_fname}")
                         self.on_row_update(info.get("rowid"), status="Błąd upload", tag="error")
@@ -551,9 +595,9 @@ class PipelineWorker:
                 upd_out(100)
                 work_queue.task_done()
 
-        t_fetch  = threading.Thread(target=prefetch, daemon=True, name=f"prefetch-{label}")
-        t_encode = threading.Thread(target=encode,   daemon=True, name=f"encode-{label}")
-        t_upload = threading.Thread(target=upload,   daemon=True, name=f"upload-{label}")
+        t_fetch = threading.Thread(target=prefetch, daemon=True, name=f"prefetch-{label}")
+        t_encode = threading.Thread(target=encode, daemon=True, name=f"encode-{label}")
+        t_upload = threading.Thread(target=upload, daemon=True, name=f"upload-{label}")
         t_fetch.start()
         t_encode.start()
         t_upload.start()
@@ -566,9 +610,10 @@ class PipelineWorker:
         ts = datetime.now().strftime("%Y%m%d%H%M%S")
         json_path = self.cfg.tmpdir / f"testvmaf_{label}_{ts}.json"
         vmaf_vals = [r["vmaf"] for r in self.test_results if r["vmaf"] > 0]
-        sav_vals  = [r["savingspct"] for r in self.test_results]
+        sav_vals = [r["savingspct"] for r in self.test_results]
         payload = {
-            "runid": ts, "gpu_label": label,
+            "runid": ts,
+            "gpu_label": label,
             "encoder": self.cfg.encoder.value,
             "total_files": len(self.test_results),
             "summary": {
@@ -580,9 +625,7 @@ class PipelineWorker:
             "files": self.test_results,
         }
         try:
-            json_path.write_text(
-                json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
             smry = payload["summary"]
             logger.info(
                 f"[{label}] Raport: {json_path} "

@@ -1,5 +1,6 @@
 """ProbeResult dataclass – wrapper around ffprobe output with status."""
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from .enums import ProbeStatus
 from .media_info import MediaInfo
 

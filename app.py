@@ -5,6 +5,7 @@ Dodaje katalog projektu do sys.path ORAZ tworzy alias pakietu 'pyconv'
   python app.py          (bez instalacji)
   python -m pyconv       (po instalacji)
 """
+
 from __future__ import annotations
 
 import contextlib

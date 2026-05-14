@@ -3,13 +3,12 @@
 Wyodrębniony z probefile() w monolicie.
 Zachowana pełna logika: HDR detect, bit-depth, FPS r/avg fallback.
 """
+
 from __future__ import annotations
 import json
-import subprocess
 from pathlib import Path
-from typing import Optional
 
-from ..utils.subprocess_utils import run_cmd, NOWINDOW
+from ..utils.subprocess_utils import run_cmd
 from ..models.media_info import MediaInfo, ProbeResult
 from ..models.enums import ProbeStatus
 from ..utils.logging_utils import get_logger
@@ -27,9 +26,13 @@ class ProbeParser:
     def probe(self, path: Path) -> ProbeResult:
         """probefile() z monolitu — 1:1 logika, typ zwracany ProbeResult."""
         cmd = [
-            self.ffprobe_bin, "-v", "quiet",
-            "-print_format", "json",
-            "-show_streams", "-show_format",
+            self.ffprobe_bin,
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_streams",
+            "-show_format",
             str(path),
         ]
         stdout, stderr, rc = run_cmd(cmd, timeout=15)

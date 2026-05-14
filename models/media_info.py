@@ -1,4 +1,5 @@
 """MediaInfo and ProbeResult dataclasses — replace probefile() dict returns."""
+
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,7 @@ from .enums import ProbeStatus
 @dataclass
 class MediaInfo:
     """Parsed metadata for a single video file (from ffprobe JSON)."""
+
     path: Path
     size_bytes: int
     duration_seconds: float
@@ -49,6 +51,7 @@ class MediaInfo:
 @dataclass
 class ProbeResult:
     """Result of ffprobe execution — wraps MediaInfo or error."""
+
     status: ProbeStatus
     media_info: Optional[MediaInfo] = None
     error: Optional[str] = None
