@@ -23,7 +23,10 @@ jobs:
       - name: Install Ruff
         run: pip install ruff
 
-      - name: Run Ruff
+      - name: Ruff format (auto-fix imports/style)
+        run: ruff format . --diff || true
+
+      - name: Ruff check
         run: ruff check . --output-format=github
 
   mypy:

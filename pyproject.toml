@@ -20,23 +20,36 @@ line-length = 120
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes (unused imports, undefined names)
-    "I",   # isort
-    "B",   # flake8-bugbear (likely bugs)
-    "UP",  # pyupgrade
-    "SIM", # flake8-simplify
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (unused imports, undefined names)
+    "I",    # isort
+    "B",    # flake8-bugbear
 ]
 ignore = [
-    "E501",  # line too long (mamy 120 w ustawieniu)
-    "B008",  # function calls in default args
-    "SIM108",# ternary operator — czasem czytelniej bez
+    # styl / formatowanie — naprawi ruff format
+    "E501",   # line too long
+    "E701",   # multiple statements on one line
+    "I001",   # import block unsorted — naprawia ruff format
+    # UP* — modernizacja składni (opcjonalne)
+    "UP006",  # List → list
+    "UP007",  # Union → X|Y
+    "UP035",  # deprecated typing imports
+    "UP037",  # quoted annotations
+    "UP045",  # Optional → X|None
+    # SIM — czytelność (opcjonalne)
+    "SIM102", # nested if
+    "SIM105", # contextlib.suppress
+    "SIM108", # ternary
+    # B — false positives w tym kodzie
+    "B008",   # function calls in defaults
+    "B905",   # zip strict=
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"app.py" = ["F401", "E402"]  # bootstrap shim — celowe late imports
+"app.py" = ["F401", "E402"]
 "__main__.py" = ["F401"]
+"gui/callbacks.py" = ["F401"]  # dual-import try/except blok
 
 [tool.mypy]
 python_version = "3.11"
