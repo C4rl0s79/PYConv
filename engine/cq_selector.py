@@ -12,7 +12,6 @@ Wyodrębniony z monolitu. Zachowane 1:1:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from ..models.enums import EncoderType
 from ..models.media_info import MediaInfo
@@ -23,7 +22,6 @@ from ..utils.subprocess_utils import run_cmd
 
 logger = get_logger(__name__)
 
-# Z monolitu — 1:1
 CQBASE: dict[str, dict[int, int]] = {
     "av1nvenc":  {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
     "hevcnvenc": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
@@ -60,17 +58,14 @@ _REF_BITRATE: dict[int, int] = {
 
 
 class CQSelector:
-    """Dobiera CQ / GQ na podstawie danych źródła.
-
-    Opcjonalnie: profil QSV, tryb Anime, HQ complexity-probe, VMAF-target search.
-    """
+    """Dobiera CQ / GQ na podstawie danych źródła."""
 
     def __init__(
         self,
         ffmpeg_engine=None,
         qsv_profile: str = "balanced",
         anime_mode: bool = False,
-        qsv_profiles: Optional[dict] = None,
+        qsv_profiles: dict | None = None,
     ):
         self.ffmpeg_engine = ffmpeg_engine
         self.qsv_profile = qsv_profile
@@ -86,7 +81,6 @@ class CQSelector:
         fps: float = 0.0,
         src_codec: str = "h264",
     ) -> int:
-        """autocq() z monolitu — 1:1 logika BPP + stara ścieżka ratio."""
         family = encoder.value
         if family in ("av1qsv", "hevcqsv") and self.qsv_profile in self.qsv_profiles:
             table = self.qsv_profiles[self.qsv_profile].get(family, CQBASE[family])
@@ -146,7 +140,7 @@ class CQSelector:
         return result
 
     def complexity_probe(self, path: Path, duration: float, sample_secs: int = 20) -> float:
-        """complexityprobe() z monolitu: scene change rate (0.0–1.0)."""
+        """complexityprobe(): scene change rate (0.0–1.0)."""
         if duration < sample_secs * 1.5:
             ss, t = 0, max(5, int(duration * 0.5))
         else:
@@ -168,7 +162,6 @@ class CQSelector:
 
     @staticmethod
     def hq_cq_adjustment(complexity: float) -> int:
-        """hqcqadjustment() z monolitu: mapuje complexity → korektę CQ."""
         if complexity > 0.8:
             return -3
         if complexity > 0.4:
@@ -187,10 +180,9 @@ class CQSelector:
         duration: float,
         target: float,
         job_id: str = "",
-        tmpdir: Optional[Path] = None,
-        info: Optional[MediaInfo] = None,
-    ) -> Optional[int]:
-        """vmaftargetsearch() z monolitu — binary-search CQ na 30s sample."""
+        tmpdir: Path | None = None,
+        info: MediaInfo | None = None,
+    ) -> int | None:
         if duration < 60:
             return None
         if not self.ffmpeg_engine:
@@ -221,8 +213,8 @@ class CQSelector:
         cq_max = CQMAX.get(family, 51)
         lo = max(1, cq_start - 8)
         hi = min(cq_max, cq_start + 10)
-        best_cq: Optional[int] = None
-        best_diff: Optional[float] = None
+        best_cq: int | None = None
+        best_diff: float | None = None
         tried: dict[int, float] = {}
 
         def encode_and_score(cq_val: int) -> float:
