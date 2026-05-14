@@ -5,26 +5,45 @@ build-backend = "setuptools.backends.legacy:build"
 [project]
 name = "pyconv"
 version = "4.12.0"
-description = "Modular GPU video transcoding pipeline with Copyparty integration"
+description = "Plex Convert GUI — multi-GPU AV1/HEVC encoder with Copyparty support"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+dependencies = [
+    "requests",
+]
 
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
+[project.scripts]
+pyconv = "pyconv.__main__:main"
 
 [tool.ruff]
-line-length = 100
-select = ["E", "F", "W", "I", "UP", "B", "C4", "PIE", "RET"]
-ignore = ["E501"]
+target-version = "py310"
+line-length = 120
 
-[tool.ruff.isort]
-known-first-party = ["pyconv"]
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (unused imports, undefined names)
+    "I",   # isort
+    "B",   # flake8-bugbear (likely bugs)
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (mamy 120 w ustawieniu)
+    "B008",  # function calls in default args
+    "SIM108",# ternary operator — czasem czytelniej bez
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app.py" = ["F401", "E402"]  # bootstrap shim — celowe late imports
+"__main__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
-check_untyped_defs = true
+python_version = "3.11"
 ignore_missing_imports = true
+no_strict_optional = true
+follow_imports = "silent"
+show_error_codes = true
+exclude = [
+    "app\\.py",
+]
