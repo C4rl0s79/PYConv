@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: ["**"]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   ruff:
     name: Ruff (linter)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.11"
 
@@ -21,16 +24,15 @@ jobs:
         run: pip install ruff
 
       - name: Run Ruff
-        run: |
-          ruff check . --output-format=github
+        run: ruff check . --output-format=github
 
   mypy:
     name: mypy (types)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.11"
 
