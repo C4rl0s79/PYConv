@@ -1,44 +1,48 @@
-"""callbacks.py — cała logika biznesowa GUI oddzielona od widgetów.
-
-Każda metoda przyjmuje instancję 'app' (PlexConvertApp) jako pierwszy
-argument. Brak bezpośrednich importów tkinter — tylko odczyt/zapis
-atrybutów app.* i wywołania app.ui() / app.log_msg().
-
-Zachowane 1:1 z monolitu:
-  - start_scan / scan_worker (lokalny + Copyparty)
-  - start_convert / watch thread
-  - cancel, clear, set_buttons
-  - update_row, set_pb
-  - on_* toggle handlers
-  - session_save / session_load
-  - browse_src, refresh_free
-  - sort_tree, on_tree_click, select_all, deselect_all
-  - update_statusbar
-"""
+"""callbacks.py — cała logika biznesowa GUI oddzielona od widgetów."""
 from __future__ import annotations
 
 import os
 import queue
-import shutil
 import threading
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .app import PlexConvertApp
 
-from ..config.constants import SAFE_FREE_GB, WARN_FREE_GB
-from ..config.profiles import QSVPROFILES, ENCODER_OPTIONS
-from ..media.probe import probe_file, scan_dir
-from ..media.probe import cp_probe_via_http
-from ..network.client import CopypartyClient
-from ..utils.filesystem import free_gb, detect_network_drives
-from ..utils.json_utils import cfg_load, cfg_save
-from ..engine.pipeline import PipelineWorker, SequentialWorker, PipelineConfig
-from ..engine.progress import ProgressTracker
-from ..engine.cq_selector import CQSelector
-from ..models.enums import EncoderType
+# ---------------------------------------------------------------------------
+# Lazy-safe imports — działają zarówno jako pakiet jak i standalone
+# ---------------------------------------------------------------------------
+def _imp(rel, abs_):
+    """Próbuje relative import, przy błędzie wraca do absolutnego."""
+    import importlib
+    try:
+        return importlib.import_module(rel, package="gui")
+    except ImportError:
+        return importlib.import_module(abs_)
+
+try:
+    from ..config.constants import SAFE_FREE_GB, WARN_FREE_GB
+    from ..config.profiles  import QSVPROFILES, ENCODER_OPTIONS
+    from ..media.probe      import probe_file, scan_dir, cp_probe_via_http
+    from ..network.client   import CopypartyClient
+    from ..utils.filesystem import free_gb, detect_network_drives
+    from ..utils.json_utils import cfg_load, cfg_save
+    from ..engine.pipeline  import PipelineWorker, SequentialWorker, PipelineConfig
+    from ..engine.progress  import ProgressTracker
+    from ..engine.cq_selector import CQSelector
+    from ..models.enums     import EncoderType
+except ImportError:
+    from config.constants   import SAFE_FREE_GB, WARN_FREE_GB      # type: ignore
+    from config.profiles    import QSVPROFILES, ENCODER_OPTIONS     # type: ignore
+    from media.probe        import probe_file, scan_dir, cp_probe_via_http  # type: ignore
+    from network.client     import CopypartyClient                  # type: ignore
+    from utils.filesystem   import free_gb, detect_network_drives   # type: ignore
+    from utils.json_utils   import cfg_load, cfg_save               # type: ignore
+    from engine.pipeline    import PipelineWorker, SequentialWorker, PipelineConfig  # type: ignore
+    from engine.progress    import ProgressTracker                  # type: ignore
+    from engine.cq_selector import CQSelector                       # type: ignore
+    from models.enums       import EncoderType                      # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +69,6 @@ def start_scan(app: "PlexConvertApp") -> None:
 
 def _scan_worker(app: "PlexConvertApp") -> None:
     app.cancel_flag.clear()
-
     if app.use_copyparty.get():
         _scan_copyparty(app)
     else:
@@ -103,7 +106,7 @@ def _scan_copyparty(app: "PlexConvertApp") -> None:
             info["cpdir"]  = cf["dir_url"]
             info["rowid"]  = str(i)
             app.files.append(info)
-            codec  = info.get("codec", "?").lower()
+            codec = info.get("codec", "?").lower()
             tag, status = _classify(app, info, codec)
             _add_row(app, str(i), cf["name"], codec, info, cf["size"], status, tag)
             set_pb(app, "totalpb", int((i + 1) / n * 100), "totalinfo", f"Skanowanie CP {i+1}/{n}")
@@ -149,7 +152,6 @@ def _scan_local(app: "PlexConvertApp") -> None:
 
 
 def _classify(app, info: dict, codec: str) -> tuple[str, str]:
-    """Zwraca (tag, status) na podstawie codec/HDR i ustawień filtrów."""
     if info.get("hdr") and app.skip_hdr.get():
         return "hdr", "HDR — pomijany"
     if codec == "av1" and app.skip_av1.get():
@@ -198,8 +200,8 @@ def start_convert(app: "PlexConvertApp") -> None:
         set_pb(app, "copypb",   0, "copyinfo",   "")
         set_pb(app, "uploadpb", 0, "uploadinfo", "")
 
-    skip_av1   = app.skip_av1.get()
-    skip_hevc  = app.skip_hevc.get()
+    skip_av1  = app.skip_av1.get()
+    skip_hevc = app.skip_hevc.get()
     to_convert = [
         f for f in app.files
         if _is_row_selected(app, f)
@@ -376,7 +378,10 @@ def set_pb(app: "PlexConvertApp", pb_attr: str, value: float,
             app.bar_text[cv_attr] = info_text
         elif value == 0:
             app.bar_text[cv_attr] = ""
-        from .theme import redraw_bar
+        try:
+            from gui.theme import redraw_bar
+        except ImportError:
+            from theme import redraw_bar  # type: ignore
         redraw_bar(app, cv_attr)
     app.ui(do)
 
@@ -481,7 +486,10 @@ def on_vmaf_toggle(app: "PlexConvertApp") -> None:
 
 
 def on_network_toggle(app: "PlexConvertApp") -> None:
-    from ..utils.filesystem import detect_network_drives
+    try:
+        from utils.filesystem import detect_network_drives as _dnd
+    except ImportError:
+        from utils.filesystem import detect_network_drives as _dnd  # type: ignore
     if app.is_network.get():
         drives = detect_network_drives()
         app.net_drives_var.set(", ".join(drives) if drives else "brak wykrytych")
@@ -516,7 +524,7 @@ def on_anime_mode_change(app: "PlexConvertApp") -> None:
 
 
 def on_copyparty_toggle(app: "PlexConvertApp") -> None:
-    pass  # rozszerzalne
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -537,7 +545,6 @@ def browse_src(app: "PlexConvertApp") -> None:
 
 
 def refresh_free(app: "PlexConvertApp") -> None:
-    from ..utils.filesystem import free_gb
     gb = free_gb(app.tmp_var.get())
     if gb < 0:
         text, fg = "błąd odczytu", "red"
@@ -574,30 +581,30 @@ def update_statusbar(app: "PlexConvertApp") -> None:
 # ---------------------------------------------------------------------------
 
 SESSION_FIELDS = [
-    ("src_var",      "src",        None),
-    ("mode",         "mode",       None),
-    ("is_network",   "isnetwork",  None),
-    ("tmp_var",      "tmp",        None),
-    ("enc1_var",     "enc1",       None),
-    ("gpu2_enabled", "gpu2enabled",None),
-    ("enc2_var",     "enc2",       None),
-    ("auto_cq",      "autocq",     None),
-    ("cq1_var",      "cq1",        int),
-    ("cq2_var",      "cq2",        int),
-    ("min_save_var", "minsave",    int),
-    ("hq_mode",      "hqmode",     None),
-    ("vmaf_enabled", "vmafenabled",None),
-    ("vmaf_target",  "vmaftarget", float),
-    ("qsv_profile",  "qsvprofile", None),
-    ("anime_mode",   "animemode",  None),
-    ("skip_hdr",     "skiphdr",    None),
-    ("skip_av1",     "skipav1",    None),
-    ("skip_hevc",    "skiphevc",   None),
-    ("keep_orig",    "keeporig",   None),
-    ("test_mode",    "testmode",   None),
-    ("use_copyparty","cpuse",      None),
-    ("cp_src_url",   "cpurl",      None),
-    ("cp_remember",  "cpremember", None),
+    ("src_var",       "src",         None),
+    ("mode",          "mode",        None),
+    ("is_network",    "isnetwork",   None),
+    ("tmp_var",       "tmp",         None),
+    ("enc1_var",      "enc1",        None),
+    ("gpu2_enabled",  "gpu2enabled", None),
+    ("enc2_var",      "enc2",        None),
+    ("auto_cq",       "autocq",      None),
+    ("cq1_var",       "cq1",         int),
+    ("cq2_var",       "cq2",         int),
+    ("min_save_var",  "minsave",     int),
+    ("hq_mode",       "hqmode",      None),
+    ("vmaf_enabled",  "vmafenabled", None),
+    ("vmaf_target",   "vmaftarget",  float),
+    ("qsv_profile",   "qsvprofile",  None),
+    ("anime_mode",    "animemode",   None),
+    ("skip_hdr",      "skiphdr",     None),
+    ("skip_av1",      "skipav1",     None),
+    ("skip_hevc",     "skiphevc",    None),
+    ("keep_orig",     "keeporig",    None),
+    ("test_mode",     "testmode",    None),
+    ("use_copyparty", "cpuse",       None),
+    ("cp_src_url",    "cpurl",       None),
+    ("cp_remember",   "cpremember",  None),
 ]
 
 
@@ -622,7 +629,6 @@ def session_load(app: "PlexConvertApp") -> None:
     if d.get("cpremember") and "cppassword" in d:
         app.cp_password.set(d["cppassword"])
 
-    # Odśwież stany zależne
     on_gpu2_toggle(app)
     on_auto_cq_toggle(app)
     on_hq_toggle(app)
