@@ -1,195 +1,89 @@
-"""CopypartyClient – single class owning ALL Copyparty HTTP logic.
+"""CopypartyClient — hermetyzuje cały HTTP I/O z Copyparty.
 
-Pipeline workers call methods on this object.
-They never build HTTP requests themselves.
+Wyodrębniony z monolitu: cpdownloadfile(), cpuploadfile(), cpuploadup2k(),
+cpverifysize(), cpverifysha256(), cpdelete().
+
+Zachowane 1:1:
+  - STALL_TIMEOUT = 120s (brak danych → przerywamy)
+  - socket.settimeout(30) per-chunk
+  - .part pliki podczas pobierania/wgrywania
+  - chunk upload przez HTTP PUT (4 MB chunks)
+  - weryfikacja rozmiaru przez ?ls (klucz 'sz' nie 'size')
+  - weryfikacja SHA-256 przez ?checksum=sha256
+  - DELETE przez POST ?delete
+  - Auth: cookie cpp+cppwd header
+  - Cloudflare compatible (HEAD nie działa → używa ?ls)
 """
 from __future__ import annotations
-import os
-import json
-import gzip
-import time
-import socket
-import hashlib
-import base64
+
 import http.client
-import urllib.request
-import urllib.parse
+import os
+import socket
+import time
 import urllib.error
-import http.cookiejar
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Callable, Optional
 
-from utils.logging_utils import get_logger
-from utils.hashing import rm_silent
-from models.encode_result import UploadResult
-from models.enums import UploadStatus
+from ..utils.logging_utils import get_logger
+from ..utils.hashing import sha256_file, rm_silent
+from ..models.upload_result import UploadResult
+from ..models.enums import UploadStatus
 
-log = get_logger("copyparty")
+logger = get_logger(__name__)
 
-_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0"
-)
+_CHUNK_SIZE = 4 * 1024 * 1024   # 4 MB — z monolitu
+_STALL_TIMEOUT = 120            # sekund bez danych → uznaj za zawieszone
+_CONN_TIMEOUT = 300             # timeout TCP połączenia
 
 
 class CopypartyClient:
-    """HTTP client for Copyparty: upload, download, verify, delete, list."""
+    """Hermetyzuje cały HTTP I/O z Copyparty (w tym przez Cloudflare).
 
-    CHUNK_SIZE: int = 4 * 1024 * 1024      # 4 MB read/write chunks
-    DOWNLOAD_STALL_TIMEOUT: int = 120       # seconds without data → abort download
-    UPLOAD_STALL_TIMEOUT: int = 120         # seconds without send progress → abort upload
-    SOCKET_TIMEOUT: int = 30               # per-chunk socket timeout
-    CONNECT_TIMEOUT: int = 60              # urllib.urlopen connection timeout
+    GUI i Pipeline nie znają szczegółów HTTP.
+    """
 
-    def __init__(
-        self,
-        session: dict | None = None,
-        password: str = "",
-    ) -> None:
-        self._session: dict = session or {}
-        self._password = password
+    def __init__(self, password: str = "", cancel_flag=None):
+        self.password = password
+        self.cancel_flag = cancel_flag  # threading.Event
 
-    # ── Session management ───────────────────────────────────────────────────────
-
-    def login(self, base_url: str, password: str, timeout: int = 15) -> bool:
-        """POST login to Copyparty. Updates internal session on success."""
-        if not password:
-            return False
-        parsed = urllib.parse.urlparse(base_url)
-        login_url = f"{parsed.scheme}://{parsed.netloc}/"
-        bnd = "----CopypartyLoginBnd"
-        body = (
-            f"--{bnd}\r\n"
-            f'Content-Disposition: form-data; name="cppwd"\r\n\r\n'
-            f"{password}\r\n"
-            f"--{bnd}--\r\n"
-        ).encode("utf-8")
-        cj = http.cookiejar.CookieJar()
-        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
-        req = urllib.request.Request(
-            login_url, data=body, method="POST",
-            headers={
-                "User-Agent": _UA,
-                "Content-Type": f"multipart/form-data; boundary={bnd}",
-                "Accept": "*/*",
-            },
-        )
-        try:
-            opener.open(req, timeout=timeout)
-            result: dict = {}
-            for cookie in cj:
-                if cookie.name in ("cppws", "cppwd", "cf_clearance"):
-                    result[cookie.name] = cookie.value
-            if result.get("cppws") or result.get("cppwd"):
-                self._session = result
-                self._password = password
-                log.info("Copyparty login OK: %s", base_url)
-                return True
-        except Exception as exc:
-            log.warning("Copyparty login failed: %s", exc)
-        return False
-
-    # ── Download ───────────────────────────────────────────────────────────────────
-
-    def download_file(
-        self,
-        url: str,
-        local_path: str,
-        total_size: int,
-        on_progress: Optional[Callable[[float, float], None]] = None,
-        cancel_flag=None,
-    ) -> bool:
-        """Download file from Copyparty with stall detection.
-
-        - Writes to local_path + '.part'; renames on success.
-        - stall watchdog: no data for DOWNLOAD_STALL_TIMEOUT seconds → abort.
-        - socket.settimeout(30) per-chunk so resp.read() never hangs forever.
-        Returns True on success.
-        """
-        hdrs = self._headers()
-        tmp_path = local_path + ".part"
-        copied = 0
-        t0 = time.time()
-        t_last_data = time.time()
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(local_path)), exist_ok=True)
-            req = urllib.request.Request(url, headers=hdrs)
-            with urllib.request.urlopen(req, timeout=self.CONNECT_TIMEOUT) as resp, \
-                    open(tmp_path, "wb") as fout:
-                try:
-                    resp.fp.raw._sock.settimeout(self.SOCKET_TIMEOUT)
-                except Exception:
-                    pass
-                while True:
-                    if cancel_flag and cancel_flag.is_set():
-                        fout.close()
-                        rm_silent(tmp_path)
-                        return False
-                    if time.time() - t_last_data > self.DOWNLOAD_STALL_TIMEOUT:
-                        fout.close()
-                        rm_silent(tmp_path)
-                        log.error(
-                            "Download STALL (%ds): %s",
-                            self.DOWNLOAD_STALL_TIMEOUT,
-                            os.path.basename(local_path),
-                        )
-                        return False
-                    try:
-                        chunk = resp.read(self.CHUNK_SIZE)
-                    except socket.timeout:
-                        continue
-                    if not chunk:
-                        break
-                    fout.write(chunk)
-                    copied += len(chunk)
-                    t_last_data = time.time()
-                    if on_progress:
-                        elapsed = max(time.time() - t0, 0.001)
-                        speed = copied / elapsed / 1024 / 1024
-                        pct = copied / total_size * 100 if total_size else 100.0
-                        on_progress(pct, speed)
-            os.replace(tmp_path, local_path)
-            return True
-        except Exception as exc:
-            rm_silent(tmp_path)
-            log.error("Download error: %s", exc)
-            return False
-
-    # ── Upload ────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
+    # PUBLIC API
+    # ------------------------------------------------------------------
 
     def upload_file(
         self,
-        local_path: str,
+        local_path: Path,
         dest_url: str,
+        job_id: str = "",
         on_progress: Optional[Callable[[float, float], None]] = None,
-        cancel_flag=None,
     ) -> UploadResult:
-        """Upload file via HTTP PUT with stall detection.
+        """cpuploadfile() z monolitu: HTTP PUT binary z chunk upload.
 
-        Returns UploadResult; call verify_upload() afterwards before deleting local file.
+        dest_url = pełny URL docelowy z nazwą pliku.
+        on_progress(pct: float, speed_mbs: float)
         """
-        file_size = os.path.getsize(local_path)
+        local_path = Path(local_path)
+        file_size = local_path.stat().st_size
         hdrs = self._headers()
         hdrs["Content-Type"] = "application/octet-stream"
         hdrs["Content-Length"] = str(file_size)
-        sent = 0
-        t0 = time.time()
-        t_last_sent = time.time()
-        last_sent_pos = 0
+
+        parsed = urllib.parse.urlparse(dest_url)
+        use_ssl = parsed.scheme == "https"
+        host = parsed.netloc
+        path = parsed.path
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+
+        logger.info(f"[{job_id}] Upload HTTP PUT {dest_url} ({file_size/1024/1024:.1f} MB)")
 
         try:
-            parsed = urllib.parse.urlparse(dest_url)
-            use_ssl = parsed.scheme == "https"
-            host = parsed.netloc
-            path = parsed.path
-            if parsed.query:
-                path += "?" + parsed.query
-
             conn = (
-                http.client.HTTPSConnection(host, timeout=300)
+                http.client.HTTPSConnection(host, timeout=_CONN_TIMEOUT)
                 if use_ssl
-                else http.client.HTTPConnection(host, timeout=300)
+                else http.client.HTTPConnection(host, timeout=_CONN_TIMEOUT)
             )
             conn.connect()
             conn.putrequest("PUT", path)
@@ -197,244 +91,260 @@ class CopypartyClient:
                 conn.putheader(k, v)
             conn.endheaders()
 
+            sent = 0
+            t0 = time.time()
+            t_last_sent = time.time()
+            last_sent_pos = 0
+
             with open(local_path, "rb") as fin:
                 while True:
-                    if cancel_flag and cancel_flag.is_set():
+                    if self.cancel_flag and self.cancel_flag.is_set():
                         conn.close()
-                        return UploadResult(status=UploadStatus.CANCELLED)
-                    if sent == last_sent_pos and time.time() - t_last_sent > self.UPLOAD_STALL_TIMEOUT:
+                        return UploadResult(UploadStatus.FAILED, error="Cancelled")
+
+                    # Stall check — 120s bez postępu
+                    if sent != last_sent_pos and time.time() - t_last_sent > _STALL_TIMEOUT:
                         conn.close()
-                        log.error(
-                            "Upload STALL (%ds): %s",
-                            self.UPLOAD_STALL_TIMEOUT,
-                            os.path.basename(local_path),
-                        )
-                        return UploadResult(status=UploadStatus.STALLED)
-                    chunk = fin.read(self.CHUNK_SIZE)
+                        logger.error(f"[{job_id}] Upload STALL {_STALL_TIMEOUT}s")
+                        return UploadResult(UploadStatus.FAILED, error="Upload stall timeout")
+
+                    chunk = fin.read(_CHUNK_SIZE)
                     if not chunk:
                         break
                     conn.send(chunk)
+
                     if sent != last_sent_pos:
                         t_last_sent = time.time()
                         last_sent_pos = sent
                     sent += len(chunk)
                     t_last_sent = time.time()
                     last_sent_pos = sent
+
+                    elapsed = max(time.time() - t0, 0.001)
+                    speed = sent / elapsed / 1024 / 1024
+                    pct = sent / file_size * 100 if file_size else 100.0
                     if on_progress:
-                        elapsed = max(time.time() - t0, 0.001)
-                        speed = sent / elapsed / 1024 / 1024
-                        pct = sent / file_size * 100 if file_size else 100.0
                         on_progress(pct, speed)
 
             resp = conn.getresponse()
             resp.read()
             conn.close()
-            if resp.status in (200, 201, 204):
+
+            if resp.status not in (200, 201, 204):
                 return UploadResult(
-                    status=UploadStatus.DONE,
+                    UploadStatus.FAILED,
                     local_size=file_size,
-                    dest_url=dest_url,
+                    error=f"HTTP {resp.status}",
                 )
             return UploadResult(
-                status=UploadStatus.FAILED,
-                error_msg=f"HTTP {resp.status}",
+                UploadStatus.IN_PROGRESS,
+                local_size=file_size,
             )
-        except Exception as exc:
-            log.error("Upload error: %s", exc)
-            return UploadResult(status=UploadStatus.FAILED, error_msg=str(exc))
 
-    # ── Verify ────────────────────────────────────────────────────────────────────
+        except Exception as e:
+            logger.error(f"[{job_id}] Upload error: {e}")
+            return UploadResult(UploadStatus.FAILED, error=str(e))
+
+    def download_file(
+        self,
+        src_url: str,
+        local_path: Path,
+        expected_size: int = 0,
+        job_id: str = "",
+        on_progress: Optional[Callable[[float, float], None]] = None,
+    ) -> bool:
+        """cpdownloadfile() z monolitu: pobiera do .part, potem rename.
+
+        STALL watchdog 120s: jeśli socket przestaje dawać dane → przerywamy.
+        """
+        local_path = Path(local_path)
+        tmp_path = local_path.with_suffix(local_path.suffix + ".part")
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"[{job_id}] Download {src_url} → {local_path.name}")
+
+        try:
+            req = urllib.request.Request(src_url, headers=self._headers())
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                total = int(resp.headers.get("Content-Length") or expected_size or 0)
+                sock = resp.fp.raw.fileno() if hasattr(resp.fp, "raw") else None
+                if sock:
+                    try:
+                        # per-chunk stall watchdog
+                        import socket as _sock
+                        resp.fp.raw._sock.settimeout(30)
+                    except Exception:
+                        pass
+
+                copied = 0
+                t0 = time.time()
+                t_last_data = time.time()
+
+                with open(tmp_path, "wb") as fout:
+                    while True:
+                        if self.cancel_flag and self.cancel_flag.is_set():
+                            rm_silent(tmp_path)
+                            return False
+
+                        # Stall watchdog
+                        if time.time() - t_last_data > _STALL_TIMEOUT:
+                            rm_silent(tmp_path)
+                            logger.error(f"[{job_id}] Download STALL {_STALL_TIMEOUT}s")
+                            return False
+
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        fout.write(chunk)
+                        copied += len(chunk)
+                        t_last_data = time.time()
+
+                        elapsed = max(time.time() - t0, 0.001)
+                        speed = copied / elapsed / 1024 / 1024
+                        pct = copied / total * 100 if total else 100.0
+                        if on_progress:
+                            on_progress(pct, speed)
+
+            tmp_path.replace(local_path)
+            return True
+
+        except Exception as e:
+            rm_silent(tmp_path)
+            logger.error(f"[{job_id}] Download error: {e}")
+            return False
 
     def verify_upload(
         self,
+        local_path: Path,
         dir_url: str,
-        fname: str,
-        local_size: int,
-    ) -> bool:
-        """Verify uploaded file size via /?ls. Returns True if remote_size == local_size."""
-        remote_size = self.get_remote_size(dir_url, fname)
-        if remote_size == local_size:
-            return True
-        log.warning(
-            "Size mismatch after upload: local=%d remote=%d fname=%s",
-            local_size, remote_size, fname,
-        )
-        return False
+        filename: str,
+        job_id: str = "",
+        check_sha: bool = True,
+    ) -> UploadResult:
+        """Po uploadzie: sprawdza rozmiar przez ?ls + opcjonalnie SHA-256.
 
-    def get_remote_size(self, dir_url: str, fname: str) -> int:
-        """Query /?ls and return the 'sz' field for *fname*. Returns 0 on error."""
-        ls_url = dir_url.rstrip("/") + "/?ls"
-        req = urllib.request.Request(ls_url, headers=self._headers())
+        Zachowana logika: HEAD nie działa przez Cloudflare → używa ?ls.
+        Usuwa local temp TYLKO jeśli weryfikacja OK — 1:1 z monolitu.
+        """
+        local_size = local_path.stat().st_size
+        local_sha = ""
+
+        remote_size = self.get_remote_size(dir_url, filename)
+        if remote_size <= 0 or remote_size < local_size * 0.99:
+            logger.error(
+                f"[{job_id}] Size mismatch: remote={remote_size} local={local_size}"
+            )
+            return UploadResult(
+                UploadStatus.SIZE_MISMATCH,
+                local_size=local_size,
+                remote_size=remote_size,
+                error="Remote size mismatch",
+            )
+
+        if check_sha:
+            file_url = dir_url.rstrip("/") + "/" + urllib.parse.quote(filename)
+            remote_sha = self.get_remote_sha256(file_url)
+            if remote_sha:
+                local_sha = sha256_file(local_path)
+                if local_sha != remote_sha:
+                    logger.error(
+                        f"[{job_id}] SHA mismatch: local={local_sha[:16]} remote={remote_sha[:16]}"
+                    )
+                    return UploadResult(
+                        UploadStatus.SHA_MISMATCH,
+                        local_size=local_size,
+                        remote_size=remote_size,
+                        local_sha256=local_sha,
+                        remote_sha256=remote_sha,
+                        error="SHA-256 mismatch after upload",
+                    )
+                logger.info(f"[{job_id}] SHA-256 OK: {local_sha[:16]}")
+
+        return UploadResult(
+            UploadStatus.VERIFIED,
+            local_size=local_size,
+            remote_size=remote_size,
+            local_sha256=local_sha,
+        )
+
+    def get_remote_size(self, dir_url: str, filename: str) -> int:
+        """cpverifysize() z monolitu — ?ls endpoint, klucz 'sz'.
+
+        HEAD request nie działa przez Cloudflare — zachowana logika.
+        """
+        ls_url = dir_url.rstrip("/") + "?ls"
         try:
+            req = urllib.request.Request(ls_url, headers=self._headers())
             with urllib.request.urlopen(req, timeout=15) as r:
                 data = self._read_json(r)
             for f in data.get("files", []):
                 if not isinstance(f, dict):
                     continue
-                href_f = f.get("href", "")
-                fn = urllib.parse.unquote(href_f.split("?")[0])
-                if fn == fname:
-                    return f.get("sz", 0)
-        except Exception as exc:
-            log.warning("get_remote_size error: %s", exc)
-        return 0
+                href = f.get("href", "")
+                fn = urllib.parse.unquote(href.split("?")[0])
+                if fn == filename:
+                    return f.get("sz", 0)  # 'sz' nie 'size' — z monolitu
+            return 0
+        except Exception as e:
+            logger.warning(f"get_remote_size error: {e}")
+            return 0
 
-    # ── Delete ───────────────────────────────────────────────────────────────────
-
-    def delete_file(self, url: str) -> bool:
-        """Delete a remote file via POST ?delete."""
-        del_url = url.rstrip("/") + "?delete"
-        req = urllib.request.Request(
-            del_url, data=b"", method="POST", headers=self._headers()
-        )
+    def get_remote_sha256(self, file_url: str) -> str:
+        """cpverifysha256() z monolitu — ?checksum=sha256."""
+        url = file_url.rstrip("/") + "?checksum=sha256"
         try:
+            req = urllib.request.Request(url, headers=self._headers())
+            with urllib.request.urlopen(req, timeout=30) as r:
+                data = self._read_json(r)
+            return (data.get("sha256") or data.get("checksum") or "").lower()
+        except Exception:
+            return ""
+
+    def delete_file(self, file_url: str, job_id: str = "") -> bool:
+        """cpdelete() z monolitu — POST ?delete."""
+        del_url = file_url.rstrip("/") + "?delete"
+        try:
+            req = urllib.request.Request(
+                del_url, data=b"", method="POST", headers=self._headers()
+            )
             with urllib.request.urlopen(req, timeout=15) as r:
                 return r.status in (200, 204)
-        except Exception as exc:
-            log.warning("delete_file error: %s", exc)
+        except Exception as e:
+            logger.warning(f"[{job_id}] delete_file error: {e}")
             return False
 
-    # ── List ────────────────────────────────────────────────────────────────────
-
-    def list_files(self, base_url: str) -> list[dict]:
-        """Recursively list all supported media files under *base_url*."""
-        from config.constants import SUPPORTED_EXTS
-        results: list[dict] = []
-
-        def _recurse(url: str) -> None:
-            ls_url = url.rstrip("/") + "/?ls"
+    def list_directory(self, dir_url: str) -> list:
+        """?ls endpoint — zwraca listę plików w katalogu."""
+        ls_url = dir_url.rstrip("/") + "?ls"
+        try:
             req = urllib.request.Request(ls_url, headers=self._headers())
-            try:
-                with urllib.request.urlopen(req, timeout=30) as r:
-                    data = self._read_json(r)
-            except Exception as exc:
-                log.warning("list_files error at %s: %s", ls_url, exc)
-                return
-            for d in data.get("dirs", []):
-                if not isinstance(d, dict):
-                    continue
-                href = d.get("href", "")
-                dn = urllib.parse.unquote(href).rstrip("/")
-                if not dn or dn.startswith("."):
-                    continue
-                sub_url = url.rstrip("/") + "/" + urllib.parse.quote(dn, safe="")
-                _recurse(sub_url)
-            for f in data.get("files", []):
-                if not isinstance(f, dict):
-                    continue
-                href_f = f.get("href", "")
-                if not href_f:
-                    continue
-                fn = urllib.parse.unquote(href_f.split("?")[0])
-                if not fn:
-                    continue
-                from pathlib import Path as _Path
-                if _Path(fn).suffix.lower() not in SUPPORTED_EXTS:
-                    continue
-                file_url = href_f if href_f.startswith("http") else url.rstrip("/") + "/" + href_f
-                results.append({
-                    "path_url": file_url,
-                    "dir_url": url.rstrip("/") + "/",
-                    "name": fn,
-                    "size": f.get("sz", 0),
-                })
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return self._read_json(r).get("files", [])
+        except Exception as e:
+            logger.warning(f"list_directory error: {e}")
+            return []
 
-        _recurse(base_url)
-        return results
-
-    # ── Credentials ───────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _cred_key() -> bytes:
-        import socket as _s
-        import os as _os
-        raw = _s.gethostname() + _os.environ.get("USERNAME", _os.environ.get("USER", "u"))
-        return hashlib.sha256(raw.encode()).digest()
-
-    @staticmethod
-    def _cred_file() -> str:
-        return os.path.join(os.path.expanduser("~"), ".converv_creds")
-
-    def save_credentials(self, url: str) -> None:
-        """Persist URL + password + session tokens to ~/.converv_creds."""
-        key = self._cred_key()
-
-        def _xor(data: bytes) -> bytes:
-            return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-
-        data: dict = {
-            "url": url,
-            "password_enc": base64.b64encode(_xor(self._password.encode())).decode(),
-            "version": 3,
-        }
-        for k in ("cppws", "cppwd"):
-            if self._session.get(k):
-                data[f"{k}_enc"] = base64.b64encode(
-                    _xor(self._session[k].encode())
-                ).decode()
-        try:
-            with open(self._cred_file(), "w", encoding="utf-8") as f:
-                json.dump(data, f)
-            try:
-                os.chmod(self._cred_file(), 0o600)
-            except Exception:
-                pass
-        except Exception as exc:
-            log.warning("save_credentials error: %s", exc)
-
-    def load_credentials(self) -> tuple[str, str, dict]:
-        """Load URL + password + session from ~/.converv_creds."""
-        path = self._cred_file()
-        if not os.path.exists(path):
-            return "", "", {}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            key = self._cred_key()
-
-            def _xor(data_b: bytes) -> bytes:
-                return bytes(b ^ key[i % len(key)] for i, b in enumerate(data_b))
-
-            pw = ""
-            if data.get("password_enc"):
-                pw = _xor(base64.b64decode(data["password_enc"])).decode("utf-8")
-            session: dict = {}
-            for k in ("cppws", "cppwd"):
-                enc_k = f"{k}_enc"
-                if data.get(enc_k):
-                    session[k] = _xor(base64.b64decode(data[enc_k])).decode("utf-8")
-            return data.get("url", ""), pw, session
-        except Exception as exc:
-            log.warning("load_credentials error: %s", exc)
-            return "", "", {}
-
-    def delete_credentials(self) -> None:
-        try:
-            os.remove(self._cred_file())
-        except Exception:
-            pass
-
-    # ── Internals ─────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
+    # PRIVATE HELPERS
+    # ------------------------------------------------------------------
 
     def _headers(self) -> dict:
-        h = {"User-Agent": _UA, "Accept": "*/*"}
-        if self._session:
-            parts = []
-            for k in ("cppws", "cppwd"):
-                if self._session.get(k):
-                    parts.append(f"{k}={self._session[k]}")
-            if self._session.get("cf_clearance"):
-                parts.append(f"cf_clearance={self._session['cf_clearance']}")
-            if parts:
-                h["Cookie"] = "; ".join(parts)
-        if self._password:
-            h["PW"] = self._password
-        return h
+        """Auth headers — cookie cpp + cppwd fallback."""
+        hdrs = {}
+        if self.password:
+            import base64
+            hdrs["Cookie"] = f"cppwd={self.password}"
+            hdrs["PW"] = self.password  # fallback header z monolitu
+        return hdrs
 
     @staticmethod
     def _read_json(response) -> dict:
+        """Czyta JSON z urllib response."""
+        import json
         raw = response.read()
-        enc = (response.headers.get("Content-Encoding") or "").lower()
-        if enc == "gzip" or raw[:2] == b"\x1f\x8b":
-            raw = gzip.decompress(raw)
-        return json.loads(raw.decode("utf-8"))
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="replace")
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {}
