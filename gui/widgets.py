@@ -14,9 +14,11 @@ from tkinter import ttk, scrolledtext, filedialog
 from .theme import (
     DARKBG, PANELBG, BORDER, TEXTPRI, TEXTSEC, TEXTMUTED,
     ACCENT, ACCENT2, GREEN, BARH,
-    HDRGCOLOR := "#f0c060",  # nie ma w theme — alias
     redraw_bar,
 )
+
+# Stała lokalna — nie ma w theme
+HDRGCOLOR = "#f0c060"
 
 # Wartości domyślne
 ENCODER_OPTIONS = [
@@ -257,4 +259,169 @@ def _build_tab_enc(app, parent: ttk.Frame) -> None:
     app.vmaf_scale.grid(row=1, column=1, sticky="ew", padx=4)
     vmaf_sub.columnconfigure(1, weight=1)
 
-    # QSV Prof
+    # QSV Profile
+    qf = ttk.LabelFrame(inner, text="Profil QSV")
+    qf.pack(fill=tk.X, padx=6, pady=4)
+    app.qsv_profile = tk.StringVar(value="quality")
+    for val, label in [("quality", "Quality"), ("balanced", "Balanced")]:
+        ttk.Radiobutton(
+            qf, text=label, variable=app.qsv_profile, value=val,
+            command=app.on_qsv_profile_change,
+        ).pack(side=tk.LEFT, padx=8, pady=4)
+    app.qsv_profile_lbl = ttk.Label(qf, text="", foreground=TEXTSEC, font=("TkDefaultFont", 8))
+    app.qsv_profile_lbl.pack(side=tk.LEFT, padx=8)
+
+    # Anime
+    af = ttk.LabelFrame(inner, text="Tryb Anime")
+    af.pack(fill=tk.X, padx=6, pady=4)
+    app.anime_mode = tk.BooleanVar(value=False)
+    ttk.Checkbutton(
+        af, text="Anime / animacja (niższe CQ, inny tuning)",
+        variable=app.anime_mode, command=app.on_anime_mode_change,
+    ).pack(anchor="w", padx=4, pady=4)
+
+    # Filtry
+    ff = ttk.LabelFrame(inner, text="Filtry / pomijanie")
+    ff.pack(fill=tk.X, padx=6, pady=4)
+    app.skip_hdr  = tk.BooleanVar(value=True)
+    app.skip_av1  = tk.BooleanVar(value=True)
+    app.skip_hevc = tk.BooleanVar(value=False)
+    app.keep_orig = tk.BooleanVar(value=False)
+    app.test_mode = tk.BooleanVar(value=False)
+    ttk.Checkbutton(ff, text="Pomijaj HDR",        variable=app.skip_hdr).pack(anchor="w", padx=4, pady=2)
+    ttk.Checkbutton(ff, text="Pomijaj już AV1",    variable=app.skip_av1).pack(anchor="w", padx=4, pady=2)
+    ttk.Checkbutton(ff, text="Pomijaj już HEVC",   variable=app.skip_hevc).pack(anchor="w", padx=4, pady=2)
+    ttk.Checkbutton(ff, text="Zachowaj oryginały", variable=app.keep_orig).pack(anchor="w", padx=4, pady=2)
+    ttk.Checkbutton(ff, text="Tryb testowy (bez zapisu)", variable=app.test_mode).pack(anchor="w", padx=4, pady=2)
+
+
+def _build_tab_cp(app, parent: ttk.Frame) -> None:
+    """Zakładka Copyparty: URL, hasło, login, status."""
+    inner = make_scrollable(parent)
+
+    cf = ttk.LabelFrame(inner, text="Copyparty HTTP")
+    cf.pack(fill=tk.X, padx=6, pady=(6, 4))
+
+    app.use_copyparty = tk.BooleanVar(value=False)
+    ttk.Checkbutton(
+        cf, text="Używaj Copyparty (HTTP upload/download)",
+        variable=app.use_copyparty, command=app.on_copyparty_toggle,
+    ).pack(anchor="w", padx=4, pady=(4, 2))
+
+    # URL źródłowy
+    url_row = ttk.Frame(cf)
+    url_row.pack(fill=tk.X, padx=4, pady=2)
+    ttk.Label(url_row, text="URL źródło:", width=12, anchor="w").pack(side=tk.LEFT)
+    app.cp_src_url = tk.StringVar()
+    ttk.Entry(url_row, textvariable=app.cp_src_url).pack(side=tk.LEFT, fill=tk.X, expand=True)
+    ttk.Button(url_row, text="…", width=3, command=app.cp_browse).pack(side=tk.LEFT, padx=(2, 0))
+
+    # Hasło
+    pw_row = ttk.Frame(cf)
+    pw_row.pack(fill=tk.X, padx=4, pady=2)
+    ttk.Label(pw_row, text="Hasło:", width=12, anchor="w").pack(side=tk.LEFT)
+    app.cp_password = tk.StringVar()
+    ttk.Entry(pw_row, textvariable=app.cp_password, show="*").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+    # Zapamiętaj hasło
+    app.cp_remember = tk.BooleanVar(value=False)
+    ttk.Checkbutton(cf, text="Zapamiętaj hasło", variable=app.cp_remember).pack(anchor="w", padx=4, pady=2)
+
+    # Przyciski
+    btn_row = ttk.Frame(cf)
+    btn_row.pack(fill=tk.X, padx=4, pady=(4, 6))
+    ttk.Button(btn_row, text="Zaloguj",          command=app.cp_do_login).pack(side=tk.LEFT, padx=2)
+    ttk.Button(btn_row, text="CF refresh",       command=app.cp_refresh_cf).pack(side=tk.LEFT, padx=2)
+    ttk.Button(btn_row, text="Otwórz w przegl.", command=app.cp_browser_fallback_login).pack(side=tk.LEFT, padx=2)
+
+    # Status logowania
+    app.cp_login_status = tk.StringVar(value="—")
+    ttk.Label(cf, textvariable=app.cp_login_status, foreground=TEXTSEC).pack(anchor="w", padx=4, pady=(0, 4))
+
+
+def _build_right(app, parent: ttk.Frame) -> None:
+    """Prawa kolumna: progress bary + Treeview + log."""
+    _build_progress(app, parent)
+    _build_tree(app, parent)
+    _build_log(app, parent)
+
+
+def _build_progress(app, parent: ttk.Frame) -> None:
+    """5 canvas-based progress barów."""
+    pf = ttk.LabelFrame(parent, text="Postęp")
+    pf.pack(fill=tk.X, padx=4, pady=(4, 2))
+
+    BAR_DEFS = [
+        ("copycv",   "copy",   "Kopiowanie SMB"),
+        ("uploadcv", "upload", "Upload CP"),
+        ("file1cv",  "file1",  "GPU 1"),
+        ("file2cv",  "file2",  "GPU 2"),
+        ("totalcv",  "total",  "Łącznie"),
+    ]
+    for cv_attr, pct_attr, label in BAR_DEFS:
+        row = ttk.Frame(pf)
+        row.pack(fill=tk.X, padx=4, pady=2)
+        ttk.Label(row, text=label, width=14, anchor="w").pack(side=tk.LEFT)
+        cv = tk.Canvas(row, height=BARH, bg=PANELBG, highlightthickness=0)
+        cv.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        setattr(app, cv_attr, cv)
+        cv.bind("<Configure>", lambda e, a=cv_attr: redraw_bar(app, a))
+
+
+def _build_tree(app, parent: ttk.Frame) -> None:
+    """Treeview z kolumnami + przyciski zaznaczenia."""
+    sel_row = ttk.Frame(parent)
+    sel_row.pack(fill=tk.X, padx=4, pady=(2, 0))
+    ttk.Button(sel_row, text="Zaznacz wszystko",  command=app.select_all).pack(side=tk.LEFT, padx=2)
+    ttk.Button(sel_row, text="Odznacz wszystko",  command=app.deselect_all).pack(side=tk.LEFT, padx=2)
+
+    tf = ttk.Frame(parent)
+    tf.pack(fill=tk.BOTH, expand=True, padx=4, pady=(2, 2))
+
+    COLS = ("sel", "name", "codec", "res", "size", "hdr", "status", "savings", "gpu")
+    HDR  = ("✓",  "Plik",  "Kodek", "Res", "Rozmiar", "HDR", "Status", "Oszczęd.", "GPU")
+    WIDTHS = (28, 260, 80, 90, 80, 40, 110, 75, 60)
+
+    app.tree = ttk.Treeview(tf, columns=COLS, show="headings", selectmode="none")
+    vsb = ttk.Scrollbar(tf, orient="vertical",   command=app.tree.yview)
+    hsb = ttk.Scrollbar(tf, orient="horizontal",  command=app.tree.xview)
+    app.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+    app.tree.grid(row=0, column=0, sticky="nsew")
+    vsb.grid(row=0, column=1, sticky="ns")
+    hsb.grid(row=1, column=0, sticky="ew")
+    tf.rowconfigure(0, weight=1)
+    tf.columnconfigure(0, weight=1)
+
+    for col, hdr, w in zip(COLS, HDR, WIDTHS):
+        app.tree.heading(col, text=hdr,
+                         command=lambda c=col: app.sort_tree(c))
+        app.tree.column(col, width=w, minwidth=24, stretch=(col == "name"))
+
+    # Tagi kolorów wierszy
+    app.tree.tag_configure("hdr",   foreground="#f97316")
+    app.tree.tag_configure("skip2", foreground=TEXTMUTED)
+    app.tree.tag_configure("done",  foreground=GREEN)
+    app.tree.tag_configure("error", foreground="#ef4444")
+    app.tree.tag_configure("warn",  foreground="#facc15")
+
+    app.tree.bind("<Button-1>", app.on_tree_click)
+
+
+def _build_log(app, parent: ttk.Frame) -> None:
+    """ScrolledText log na dole."""
+    lf = ttk.LabelFrame(parent, text="Log")
+    lf.pack(fill=tk.X, padx=4, pady=(2, 4))
+
+    app.log = scrolledtext.ScrolledText(
+        lf, height=8, state="disabled",
+        bg="#0d1117", fg=TEXTSEC,
+        font=("Consolas", 8),
+        relief="flat", bd=0,
+    )
+    app.log.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+    # Tagi koloru logów
+    app.log.tag_configure("INFO",  foreground=TEXTSEC)
+    app.log.tag_configure("DONE",  foreground=GREEN)
+    app.log.tag_configure("WARN",  foreground="#facc15")
+    app.log.tag_configure("ERROR", foreground="#ef4444")
