@@ -1,0 +1,89 @@
+name: Lint & Type Check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  ruff-autofix:
+    name: Ruff (auto-fix)
+    runs-on: ubuntu-latest
+    # Nie commituj na PR-ach (brak uprawnień do cudzych forków)
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          # Użyj tokenu z prawem do push
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: ruff format + check --fix --unsafe-fixes
+        run: |
+          ruff format .
+          ruff check . --fix --unsafe-fixes || true
+
+      - name: Commit fixes (jeśli są zmiany)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet && echo "Brak zmian" || (
+            git add -A &&
+            git commit -m "style: ruff auto-fix [skip ci]" &&
+            git push
+          )
+
+  ruff-check:
+    name: Ruff (linter)
+    runs-on: ubuntu-latest
+    # Na PR-ach tylko sprawdzaj (bez commita)
+    needs: []
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check . --output-format=github
+
+  mypy:
+    name: mypy (types)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install mypy
+          pip install types-requests || true
+
+      - name: Run mypy
+        run: |
+          mypy gui/ config/ engine/ media/ network/ utils/ models/ \
+            --ignore-missing-imports \
+            --no-strict-optional \
+            --follow-imports=silent \
+            --show-error-codes \
+            --pretty
+        continue-on-error: true
