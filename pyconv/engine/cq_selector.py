@@ -30,57 +30,57 @@ from ..utils.subprocess_utils import run_cmd
 logger = get_logger(__name__)
 
 CQBASE: dict[str, dict[int, int]] = {
-    "av1_nvenc":  {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
+    "av1_nvenc": {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
     "hevc_nvenc": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
     # QSV ICQ — podniesione o +2 dla 1080p i poniżej (bardziej konserwatywna baza)
-    "av1_qsv":    {2160: 22, 1440: 20, 1080: 18, 720: 16, 0: 14},
-    "hevc_qsv":   {2160: 27, 1440: 25, 1080: 22, 720: 20, 0: 20},
-    "av1_amf":    {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "hevc_amf":   {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
-    "libx265":    {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
-    "libsvtav1":  {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "av1_qsv": {2160: 22, 1440: 20, 1080: 18, 720: 16, 0: 14},
+    "hevc_qsv": {2160: 27, 1440: 25, 1080: 22, 720: 20, 0: 20},
+    "av1_amf": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "hevc_amf": {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
+    "libx265": {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
+    "libsvtav1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
     "libaom-av1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
 }
 CQMAX: dict[str, int] = {
-    "av1_nvenc":  51,
+    "av1_nvenc": 51,
     "hevc_nvenc": 51,
-    "av1_qsv":    51,
-    "hevc_qsv":   51,
-    "av1_amf":    51,
-    "hevc_amf":   51,
-    "libx265":    51,
+    "av1_qsv": 51,
+    "hevc_qsv": 51,
+    "av1_amf": 51,
+    "hevc_amf": 51,
+    "libx265": 51,
     "libaom-av1": 63,
-    "libsvtav1":  63,
+    "libsvtav1": 63,
 }
 SRCODEC_FACTOR: dict[str, float] = {
-    "h264":       1.00,
-    "avc":        1.00,
-    "mpeg4":      0.85,
+    "h264": 1.00,
+    "avc": 1.00,
+    "mpeg4": 0.85,
     "mpeg2video": 0.55,
     "mpeg1video": 0.45,
-    "vc1":        0.95,
-    "wmv3":       0.85,
-    "vp8":        1.00,
-    "vp9":        1.55,
-    "hevc":       1.65,
-    "h265":       1.65,
-    "av1":        2.00,
+    "vc1": 0.95,
+    "wmv3": 0.85,
+    "vp8": 1.00,
+    "vp9": 1.55,
+    "hevc": 1.65,
+    "h265": 1.65,
+    "av1": 2.00,
 }
 # Zachowana kompatybilność wsteczna
 SRCCODEC_FACTOR = SRCODEC_FACTOR
 
 _ANIME_MIN: dict[str, int] = {
-    "av1_qsv":    14,
-    "hevc_qsv":   18,
-    "av1_nvenc":  32,
+    "av1_qsv": 14,
+    "hevc_qsv": 18,
+    "av1_nvenc": 32,
     "hevc_nvenc": 24,
 }
 _REF_BITRATE: dict[int, int] = {
     2160: 12000,
     1440: 6000,
     1080: 3000,
-    720:  1500,
-    0:    600,
+    720: 1500,
+    0: 600,
 }
 
 
@@ -195,12 +195,21 @@ class CQSelector:
 
         cmd = [
             "ffmpeg",
-            "-v", "error",
-            "-ss", str(ss),
-            "-t", str(t),
-            "-i", str(path),
-            "-vf", r"select=gt(scene\,0.3),metadata=print:file=-",
-            "-an", "-sn", "-f", "null", "-",
+            "-v",
+            "error",
+            "-ss",
+            str(ss),
+            "-t",
+            str(t),
+            "-i",
+            str(path),
+            "-vf",
+            r"select=gt(scene\,0.3),metadata=print:file=-",
+            "-an",
+            "-sn",
+            "-f",
+            "null",
+            "-",
         ]
         # timeout=60s chroni przed zawieszeniem na uszkodzonym pliku
         stdout, _stderr, rc = run_cmd(cmd, timeout=60)
@@ -264,10 +273,22 @@ class CQSelector:
         sample_ref = tdir / f"vmafref_{job_id}_{stem}.mkv"
 
         cut_cmd = [
-            ffmpeg_bin, "-y", "-v", "error",
-            "-ss", str(ss), "-t", str(sample_secs),
-            "-i", str(src),
-            "-map", "0:v:0", "-an", "-sn", "-c:v", "copy",
+            ffmpeg_bin,
+            "-y",
+            "-v",
+            "error",
+            "-ss",
+            str(ss),
+            "-t",
+            str(sample_secs),
+            "-i",
+            str(src),
+            "-map",
+            "0:v:0",
+            "-an",
+            "-sn",
+            "-c:v",
+            "copy",
             str(sample_ref),
         ]
         _, stderr, rc = run_cmd(cut_cmd, timeout=60)
