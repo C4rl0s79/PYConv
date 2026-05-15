@@ -8,6 +8,12 @@ Wyodrębniony z monolitu. Zachowane 1:1:
   - Tryb Anime: minimalny GQ
   - complexityprobe: select=gt(scene,0.3) 20s ze środka
   - vmaf_target_search: binary-search 30s sample, lo=cqstart-8, hi=cqstart+10
+
+Zmiany v2.1:
+  - hevc_qsv CQBASE: 1080→22, 720→20, 0→20 (poprzednio 21/19/18)
+  - av1_qsv  CQBASE: 1080→18, 720→16, 0→14 (poprzednio 16/14/12) — proporcjonalnie +2
+  - hq_cq_adjustment: metoda instancji z osobnymi korektami dla QSV (mniejsze ±)
+  - complexity_probe: timeout=60s, zliczanie tylko stdout (fix podwójnego liczenia)
 """
 
 from __future__ import annotations
@@ -24,53 +30,57 @@ from ..utils.subprocess_utils import run_cmd
 logger = get_logger(__name__)
 
 CQBASE: dict[str, dict[int, int]] = {
-    "av1_nvenc": {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
+    "av1_nvenc":  {2160: 38, 1440: 36, 1080: 34, 720: 32, 0: 30},
     "hevc_nvenc": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "av1_qsv": {2160: 20, 1440: 18, 1080: 16, 720: 14, 0: 12},
-    "hevc_qsv": {2160: 25, 1440: 23, 1080: 21, 720: 19, 0: 18},
-    "av1_amf": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
-    "hevc_amf": {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
-    "libx265": {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
-    "libsvtav1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    # QSV ICQ — podniesione o +2 dla 1080p i poniżej (bardziej konserwatywna baza)
+    "av1_qsv":    {2160: 22, 1440: 20, 1080: 18, 720: 16, 0: 14},
+    "hevc_qsv":   {2160: 27, 1440: 25, 1080: 22, 720: 20, 0: 20},
+    "av1_amf":    {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
+    "hevc_amf":   {2160: 26, 1440: 24, 1080: 22, 720: 20, 0: 18},
+    "libx265":    {2160: 24, 1440: 22, 1080: 20, 720: 18, 0: 16},
+    "libsvtav1":  {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
     "libaom-av1": {2160: 32, 1440: 30, 1080: 28, 720: 26, 0: 24},
 }
 CQMAX: dict[str, int] = {
-    "av1_nvenc": 51,
+    "av1_nvenc":  51,
     "hevc_nvenc": 51,
-    "av1_qsv": 51,
-    "hevc_qsv": 51,
-    "av1_amf": 51,
-    "hevc_amf": 51,
-    "libx265": 51,
+    "av1_qsv":    51,
+    "hevc_qsv":   51,
+    "av1_amf":    51,
+    "hevc_amf":   51,
+    "libx265":    51,
     "libaom-av1": 63,
-    "libsvtav1": 63,
+    "libsvtav1":  63,
 }
-SRCCODEC_FACTOR: dict[str, float] = {
-    "h264": 1.00,
-    "avc": 1.00,
-    "mpeg4": 0.85,
+SRCODEC_FACTOR: dict[str, float] = {
+    "h264":       1.00,
+    "avc":        1.00,
+    "mpeg4":      0.85,
     "mpeg2video": 0.55,
     "mpeg1video": 0.45,
-    "vc1": 0.95,
-    "wmv3": 0.85,
-    "vp8": 1.00,
-    "vp9": 1.55,
-    "hevc": 1.65,
-    "h265": 1.65,
-    "av1": 2.00,
+    "vc1":        0.95,
+    "wmv3":       0.85,
+    "vp8":        1.00,
+    "vp9":        1.55,
+    "hevc":       1.65,
+    "h265":       1.65,
+    "av1":        2.00,
 }
+# Zachowana kompatybilność wsteczna
+SRCCODEC_FACTOR = SRCODEC_FACTOR
+
 _ANIME_MIN: dict[str, int] = {
-    "av1_qsv": 14,
-    "hevc_qsv": 18,
-    "av1_nvenc": 32,
+    "av1_qsv":    14,
+    "hevc_qsv":   18,
+    "av1_nvenc":  32,
     "hevc_nvenc": 24,
 }
 _REF_BITRATE: dict[int, int] = {
     2160: 12000,
     1440: 6000,
     1080: 3000,
-    720: 1500,
-    0: 600,
+    720:  1500,
+    0:    600,
 }
 
 
@@ -167,11 +177,15 @@ class CQSelector:
         """Scene change rate (0.0–1.0).
 
         Progi complexity → korekta CQ (empiryczne, patrz hq_cq_adjustment):
-          >0.80 — wysokie tempo scen (akcja, sport)     → CQ -3
-          0.40-0.80 — umiarkowane                       → CQ -2
-          0.15-0.40 — normalne                          → bez korekty
-          0.05-0.15 — mało cięć (np. serial, rozmowy)  → CQ +1
-          <0.05     — prawie statyczne (screencap, slide) → CQ +2
+          >0.80 — wysokie tempo scen (akcja, sport)
+          0.40-0.80 — umiarkowane
+          0.15-0.40 — normalne
+          0.05-0.15 — mało cięć (np. serial, rozmowy)
+          <0.05     — prawie statyczne (screencap, slide)
+
+        Fixe v2.1:
+          - timeout=60s — ochrona przed zawieszeniem na uszkodzonym pliku
+          - zliczanie tylko stdout (metadata=print:file=- pisze na stdout)
         """
         if duration < sample_secs * 1.5:
             ss, t = 0, max(5, int(duration * 0.5))
@@ -181,35 +195,41 @@ class CQSelector:
 
         cmd = [
             "ffmpeg",
-            "-v",
-            "error",
-            "-ss",
-            str(ss),
-            "-t",
-            str(t),
-            "-i",
-            str(path),
-            "-vf",
-            r"select=gt(scene\,0.3),metadata=print:file=-",
-            "-an",
-            "-sn",
-            "-f",
-            "null",
-            "-",
+            "-v", "error",
+            "-ss", str(ss),
+            "-t", str(t),
+            "-i", str(path),
+            "-vf", r"select=gt(scene\,0.3),metadata=print:file=-",
+            "-an", "-sn", "-f", "null", "-",
         ]
-        stdout, stderr, rc = run_cmd(cmd)
+        # timeout=60s chroni przed zawieszeniem na uszkodzonym pliku
+        stdout, _stderr, rc = run_cmd(cmd, timeout=60)
         if rc != 0:
             return 0.0
-        cuts = stdout.count("lavfi.scene_score") + stderr.count("lavfi.scene_score")
+        # metadata=print:file=- pisze WYŁĄCZNIE na stdout — nie liczymy stderr
+        cuts = stdout.count("lavfi.scene_score")
         return cuts / float(t) if t > 0 else 0.0
 
-    @staticmethod
-    def hq_cq_adjustment(complexity: float) -> int:
-        """Korekta CQ na podstawie complexity_probe()."""
+    def hq_cq_adjustment(self, complexity: float, encoder_family: str = "") -> int:
+        """Korekta CQ na podstawie complexity_probe().
+
+        QSV ICQ używa mniejszych korekt niż NVENC/AMF:
+          - skala ICQ jest bardziej wrażliwa (każdy punkt = większa zmiana jakości)
+          - enkoder Intel ma wbudowany look-ahead który częściowo sam reaguje na sceny
+
+        NVENC/AMF/CPU:          QSV:
+          >0.80  → -3            >0.80  → -2
+          >0.40  → -2            >0.40  → -1
+          >0.15  →  0            >0.15  →  0
+          >0.05  → +1            >0.05  → +1
+          ≤0.05  → +2            ≤0.05  → +2
+        """
+        is_qsv = "qsv" in encoder_family
+
         if complexity > 0.8:
-            return -3
+            return -2 if is_qsv else -3
         if complexity > 0.4:
-            return -2
+            return -1 if is_qsv else -2
         if complexity > 0.15:
             return 0
         if complexity > 0.05:
@@ -244,22 +264,10 @@ class CQSelector:
         sample_ref = tdir / f"vmafref_{job_id}_{stem}.mkv"
 
         cut_cmd = [
-            ffmpeg_bin,
-            "-y",
-            "-v",
-            "error",
-            "-ss",
-            str(ss),
-            "-t",
-            str(sample_secs),
-            "-i",
-            str(src),
-            "-map",
-            "0:v:0",
-            "-an",
-            "-sn",
-            "-c:v",
-            "copy",
+            ffmpeg_bin, "-y", "-v", "error",
+            "-ss", str(ss), "-t", str(sample_secs),
+            "-i", str(src),
+            "-map", "0:v:0", "-an", "-sn", "-c:v", "copy",
             str(sample_ref),
         ]
         _, stderr, rc = run_cmd(cut_cmd, timeout=60)
