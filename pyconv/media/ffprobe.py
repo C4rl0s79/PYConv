@@ -1,15 +1,15 @@
-"""FFprobeEngine – all ffprobe knowledge in one place."""
+﻿"""FFprobeEngine – all ffprobe knowledge in one place."""
 
 from __future__ import annotations
 import json
 import os
 
-from utils.subprocess_utils import run_cmd
-from utils.logging_utils import get_logger
-from config.constants import HDR_TRANSFERS, HDR_PRIMARIES
-from models.media_info import MediaInfo
-from models.probe_result import ProbeResult
-from models.enums import ProbeStatus
+from pyconv.utils.subprocess_utils import run_cmd
+from pyconv.utils.logging_utils import get_logger
+from pyconv.config.constants import HDR_TRANSFERS, HDR_PRIMARIES
+from pyconv.models.media_info import MediaInfo
+from pyconv.models.probe_result import ProbeResult
+from pyconv.models.enums import ProbeStatus
 
 log = get_logger("ffprobe")
 
@@ -118,3 +118,4 @@ class FFprobeEngine:
             if any(x in st for x in ("HDR", "Dolby", "SMPTE")):
                 return True
         return False
+

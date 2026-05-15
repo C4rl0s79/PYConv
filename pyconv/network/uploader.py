@@ -1,13 +1,13 @@
-"""Standalone upload_file() function + post-upload verification workflow."""
+﻿"""Standalone upload_file() function + post-upload verification workflow."""
 
 from __future__ import annotations
 import os
 from typing import Callable, Optional
 
 from .copyparty import CopypartyClient
-from models.encode_result import UploadResult
-from models.enums import UploadStatus
-from utils.logging_utils import get_logger
+from pyconv.models.encode_result import UploadResult
+from pyconv.models.enums import UploadStatus
+from pyconv.utils.logging_utils import get_logger
 
 log = get_logger("uploader")
 
@@ -61,3 +61,4 @@ def upload_file(
         status=UploadStatus.FAILED,
         error_msg=f"Upload failed after {max_retries} attempts",
     )
+

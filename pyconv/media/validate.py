@@ -1,8 +1,8 @@
-"""Output file validation helpers."""
+﻿"""Output file validation helpers."""
 
 from __future__ import annotations
 import os
-from utils.subprocess_utils import run_cmd
+from pyconv.utils.subprocess_utils import run_cmd
 
 
 def validate_output(path: str, min_size: int = 1024 * 1024) -> bool:
@@ -25,3 +25,4 @@ def validate_output(path: str, min_size: int = 1024 * 1024) -> bool:
     ]
     _, _, rc = run_cmd(cmd, timeout=15)
     return rc == 0
+

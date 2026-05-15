@@ -1,4 +1,4 @@
-"""callbacks.py — cała logika biznesowa GUI oddzielona od widgetów."""
+﻿"""callbacks.py — cała logika biznesowa GUI oddzielona od widgetów."""
 
 from __future__ import annotations
 
@@ -37,16 +37,16 @@ try:
     from ..engine.cq_selector import CQSelector
     from ..models.enums import EncoderType
 except ImportError:
-    from config.constants import SAFE_FREE_GB, WARN_FREE_GB  # type: ignore
-    from config.profiles import QSVPROFILES, ENCODER_OPTIONS  # type: ignore
-    from media.probe import probe_file, scan_dir, cp_probe_via_http  # type: ignore
-    from network.copyparty import CopypartyClient  # type: ignore
-    from utils.filesystem import free_gb, detect_network_drives  # type: ignore
-    from utils.json_utils import cfg_load, cfg_save  # type: ignore
-    from engine.pipeline import PipelineWorker, SequentialWorker, PipelineConfig  # type: ignore
-    from engine.progress import ProgressTracker  # type: ignore
-    from engine.cq_selector import CQSelector  # type: ignore
-    from models.enums import EncoderType  # type: ignore
+    from pyconv.config.constants import SAFE_FREE_GB, WARN_FREE_GB  # type: ignore
+    from pyconv.config.profiles import QSVPROFILES, ENCODER_OPTIONS  # type: ignore
+    from pyconv.media.probe import probe_file, scan_dir, cp_probe_via_http  # type: ignore
+    from pyconv.network.copyparty import CopypartyClient  # type: ignore
+    from pyconv.utils.filesystem import free_gb, detect_network_drives  # type: ignore
+    from pyconv.utils.json_utils import cfg_load, cfg_save  # type: ignore
+    from pyconv.engine.pipeline import PipelineWorker, SequentialWorker, PipelineConfig  # type: ignore
+    from pyconv.engine.progress import ProgressTracker  # type: ignore
+    from pyconv.engine.cq_selector import CQSelector  # type: ignore
+    from pyconv.models.enums import EncoderType  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +436,7 @@ def set_pb(app: "PlexConvertApp", pb_attr: str, value: float, info_attr: str = N
         elif value == 0:
             app.bar_text[cv_attr] = ""
         try:
-            from gui.theme import redraw_bar
+            from pyconv.gui.theme import redraw_bar
         except ImportError:
             from theme import redraw_bar  # type: ignore
         redraw_bar(app, cv_attr)
@@ -547,9 +547,9 @@ def on_vmaf_toggle(app: "PlexConvertApp") -> None:
 
 def on_network_toggle(app: "PlexConvertApp") -> None:
     try:
-        from utils.filesystem import detect_network_drives as _dnd
+        from pyconv.utils.filesystem import detect_network_drives as _dnd
     except ImportError:
-        from utils.filesystem import detect_network_drives as _dnd  # type: ignore
+        from pyconv.utils.filesystem import detect_network_drives as _dnd  # type: ignore
     if app.is_network.get():
         drives = detect_network_drives()
         app.net_drives_var.set(", ".join(drives) if drives else "brak wykrytych")
@@ -697,3 +697,4 @@ def session_load(app: "PlexConvertApp") -> None:
     except Exception:
         pass
     update_statusbar(app)
+

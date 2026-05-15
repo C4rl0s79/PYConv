@@ -43,3 +43,8 @@ Thumbs.db
 
 # ruff / black
 .ruff_cache/
+
+ffmpeg.exe
+ffprobe.exe
+ffplay.exe
+*.exe

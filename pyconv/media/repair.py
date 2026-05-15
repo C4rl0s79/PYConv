@@ -1,4 +1,4 @@
-"""RepairChain – orchestrates the full fallback repair sequence.
+﻿"""RepairChain – orchestrates the full fallback repair sequence.
 
 Original fallback order (preserved 1:1):
   encoder_primary → encoder_sw_fallback → encoder_alt_sw → cpu_encoder
@@ -11,7 +11,7 @@ This module does NOT change the logic; it only names and isolates it.
 from __future__ import annotations
 import os
 
-from utils.logging_utils import get_logger
+from pyconv.utils.logging_utils import get_logger
 from .ffmpeg import FFmpegEngine
 
 log = get_logger("repair")
@@ -43,3 +43,4 @@ class RepairChain:
                 return fixed
             log.warning("[%s] FOURCC repair v%d FAILED", gpu_label, variant)
         return None
+

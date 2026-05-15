@@ -1,7 +1,7 @@
-"""Scene complexity probe – used by HQ mode to adjust CQ."""
+﻿"""Scene complexity probe – used by HQ mode to adjust CQ."""
 
 from __future__ import annotations
-from utils.subprocess_utils import run_cmd
+from pyconv.utils.subprocess_utils import run_cmd
 
 
 def complexity_probe(path: str, duration: float, sample_secs: int = 20) -> float:
@@ -52,3 +52,4 @@ def hq_cq_adjustment(complexity: float) -> int:
     if complexity > 0.05:
         return +1
     return +2
+
