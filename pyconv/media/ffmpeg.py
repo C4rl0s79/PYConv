@@ -499,11 +499,15 @@ class FFmpegEngine:
             ffprobe_bin = self.ffmpeg_bin.replace("ffmpeg", "ffprobe")
             cmd_sub = [
                 ffprobe_bin,
-                "-v", "error",
-                "-select_streams", "s",
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                str(src)
+                "-v",
+                "error",
+                "-select_streams",
+                "s",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(src),
             ]
             stdout, _, rc = run_cmd(cmd_sub, timeout=5)
             if rc == 0 and stdout:
@@ -616,43 +620,107 @@ class FFmpegEngine:
 
     def _quality_args(self, encoder: EncoderType, cq: int, for_probe: bool = False) -> List[str]:
         """Per-encoder parametry jakości z monolitu — 1:1.
-        
+
         for_probe=True: pomija extra_hw_frames (nieprawidłowa opcja bez hwaccel).
         """
         e = encoder.value
         if e == "av1_nvenc":
             args = [
-                "-rc", "vbr", "-cq", str(cq), "-b:v", "0", "-maxrate", "0",
-                "-preset", "p6", "-tune", "hq",
-                "-spatial-aq", "1", "-temporal-aq", "1", "-aq-strength", "8",
-                "-rc-lookahead", "32",
+                "-rc",
+                "vbr",
+                "-cq",
+                str(cq),
+                "-b:v",
+                "0",
+                "-maxrate",
+                "0",
+                "-preset",
+                "p6",
+                "-tune",
+                "hq",
+                "-spatial-aq",
+                "1",
+                "-temporal-aq",
+                "1",
+                "-aq-strength",
+                "8",
+                "-rc-lookahead",
+                "32",
             ]
             if not for_probe:
                 args += ["-extra_hw_frames", "64"]
             return args
         if e == "hevc_nvenc":
             args = [
-                "-rc", "vbr", "-cq", str(cq), "-b:v", "0", "-maxrate", "0",
-                "-preset", "p6", "-tune", "hq",
-                "-spatial-aq", "1", "-temporal-aq", "1", "-aq-strength", "8",
-                "-bf", "4", "-b_ref_mode", "middle",
-                "-rc-lookahead", "32",
+                "-rc",
+                "vbr",
+                "-cq",
+                str(cq),
+                "-b:v",
+                "0",
+                "-maxrate",
+                "0",
+                "-preset",
+                "p6",
+                "-tune",
+                "hq",
+                "-spatial-aq",
+                "1",
+                "-temporal-aq",
+                "1",
+                "-aq-strength",
+                "8",
+                "-bf",
+                "4",
+                "-b_ref_mode",
+                "middle",
+                "-rc-lookahead",
+                "32",
             ]
             if not for_probe:
                 args += ["-extra_hw_frames", "64"]
             return args
         if e == "av1_qsv":
             return [
-                "-global_quality", str(cq), "-b:v", "0", "-preset", "slow",
-                "-bf", "7", "-extbrc", "1", "-look_ahead", "1",
-                "-look_ahead_depth", "40", "-max_frame_size", "0",
+                "-global_quality",
+                str(cq),
+                "-b:v",
+                "0",
+                "-preset",
+                "slow",
+                "-bf",
+                "7",
+                "-extbrc",
+                "1",
+                "-look_ahead",
+                "1",
+                "-look_ahead_depth",
+                "40",
+                "-max_frame_size",
+                "0",
             ]
         if e == "hevc_qsv":
             return [
-                "-global_quality", str(cq), "-b:v", "0", "-preset", "slow",
-                "-bf", "8", "-b_strategy", "1", "-refs", "4",
-                "-extbrc", "1", "-look_ahead", "1",
-                "-look_ahead_depth", "40", "-max_frame_size", "0",
+                "-global_quality",
+                str(cq),
+                "-b:v",
+                "0",
+                "-preset",
+                "slow",
+                "-bf",
+                "8",
+                "-b_strategy",
+                "1",
+                "-refs",
+                "4",
+                "-extbrc",
+                "1",
+                "-look_ahead",
+                "1",
+                "-look_ahead_depth",
+                "40",
+                "-max_frame_size",
+                "0",
             ]
         if e in ("av1_amf", "hevc_amf"):
             return ["-rc", "qvbr", "-qvbr_quality_level", str(cq)]
@@ -660,8 +728,14 @@ class FFmpegEngine:
             return ["-crf", str(cq), "-preset", "8", "-b:v", "0", "-svtav1-params", "tune=0:enable-overlays=1:scd=1"]
         if e == "libx265":
             return [
-                "-crf", str(cq), "-preset", "slow", "-b:v", "0",
-                "-x265-params", "aq-mode=3:aq-strength=1.0:rd=4:psy-rd=2.0:psy-rdoq=1.0",
+                "-crf",
+                str(cq),
+                "-preset",
+                "slow",
+                "-b:v",
+                "0",
+                "-x265-params",
+                "aq-mode=3:aq-strength=1.0:rd=4:psy-rd=2.0:psy-rdoq=1.0",
             ]
         if e in ("libx264", "libaom-av1"):
             return ["-crf", str(cq), "-preset", "fast", "-b:v", "0"]

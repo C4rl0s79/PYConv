@@ -1,4 +1,4 @@
-﻿"""callbacks.py — cała logika biznesowa GUI oddzielona od widgetów."""
+"""callbacks.py — cała logika biznesowa GUI oddzielona od widgetów."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ try:
     from ..models.enums import EncoderType
 except ImportError:
     from pyconv.config.constants import SAFE_FREE_GB, WARN_FREE_GB  # type: ignore
-    from pyconv.config.profiles import QSVPROFILES, ENCODER_OPTIONS  # type: ignore
+    from pyconv.config.profiles import QSVPROFILES  # type: ignore
     from pyconv.media.probe import probe_file, scan_dir, cp_probe_via_http  # type: ignore
     from pyconv.network.copyparty import CopypartyClient  # type: ignore
     from pyconv.utils.filesystem import free_gb, detect_network_drives  # type: ignore
@@ -301,11 +301,11 @@ def start_convert(app: "PlexConvertApp") -> None:
 
     workers = []
     for enc, pb, pb_info, log_tag, _gpu_label, gpu_cq, dl_lock in configs:
-
         # Encode callback is per-GPU (each GPU has its own bar)
         def make_encode_cb(pb_=pb, pbi_=pb_info, a=app):
             def cb(val, label=""):
                 set_pb(a, pb_, val, pbi_, label)
+
             return cb
 
         cfg = PipelineConfig(
@@ -334,6 +334,7 @@ def start_convert(app: "PlexConvertApp") -> None:
         def make_row_cb(a=app):
             def cb(rowid, **kw):
                 update_row(a, rowid, **kw)
+
             return cb
 
         if is_net:
@@ -368,7 +369,6 @@ def start_convert(app: "PlexConvertApp") -> None:
         set_buttons(app, running=False)
 
     threading.Thread(target=watch, daemon=True).start()
-
 
 
 # ---------------------------------------------------------------------------
@@ -549,7 +549,7 @@ def on_network_toggle(app: "PlexConvertApp") -> None:
     try:
         from pyconv.utils.filesystem import detect_network_drives as _dnd
     except ImportError:
-        from pyconv.utils.filesystem import detect_network_drives as _dnd  # type: ignore
+        pass  # type: ignore
     if app.is_network.get():
         drives = detect_network_drives()
         app.net_drives_var.set(", ".join(drives) if drives else "brak wykrytych")
@@ -697,4 +697,3 @@ def session_load(app: "PlexConvertApp") -> None:
     except Exception:
         pass
     update_statusbar(app)
-

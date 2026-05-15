@@ -151,7 +151,7 @@ def redraw_bar(app, cv_attr: str) -> None:
     canvas = getattr(app, cv_attr, None)
     if not canvas:
         return
-    
+
     pct_attr = cv_attr.replace("cv", "pct")
     pct = getattr(app, pct_attr, 0.0)
     text = app.bar_text.get(cv_attr, "")

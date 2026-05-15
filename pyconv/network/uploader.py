@@ -1,4 +1,4 @@
-﻿"""Standalone upload_file() function + post-upload verification workflow."""
+"""Standalone upload_file() function + post-upload verification workflow."""
 
 from __future__ import annotations
 import os
@@ -61,4 +61,3 @@ def upload_file(
         status=UploadStatus.FAILED,
         error_msg=f"Upload failed after {max_retries} attempts",
     )
-

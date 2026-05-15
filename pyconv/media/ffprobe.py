@@ -1,4 +1,4 @@
-﻿"""FFprobeEngine – all ffprobe knowledge in one place."""
+"""FFprobeEngine – all ffprobe knowledge in one place."""
 
 from __future__ import annotations
 import json
@@ -118,4 +118,3 @@ class FFprobeEngine:
             if any(x in st for x in ("HDR", "Dolby", "SMPTE")):
                 return True
         return False
-

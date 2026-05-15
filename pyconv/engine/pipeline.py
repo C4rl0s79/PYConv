@@ -60,10 +60,10 @@ class PipelineConfig:
     copy_lock: Optional[threading.Lock] = None
     cancel_flag: Optional[threading.Event] = None
     # Phase-specific progress callbacks (set by gui)
-    on_copy_progress: Optional[Callable] = None    # (pct, label) → Kopiowanie bar
+    on_copy_progress: Optional[Callable] = None  # (pct, label) → Kopiowanie bar
     on_encode_progress: Optional[Callable] = None  # (pct, label) → GPU1/GPU2 bar
     on_upload_progress: Optional[Callable] = None  # (pct, label) → Upload bar
-    on_file_done: Optional[Callable] = None        # (done_n, total_n) → Łącznie bar
+    on_file_done: Optional[Callable] = None  # (done_n, total_n) → Łącznie bar
 
 
 class _WorkerBase:

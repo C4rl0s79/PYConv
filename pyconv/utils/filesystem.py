@@ -1,7 +1,7 @@
-import os
 import shutil
 import string
 import ctypes
+
 
 def free_gb(path: str) -> float:
     try:
@@ -9,6 +9,7 @@ def free_gb(path: str) -> float:
         return free / (1024**3)
     except Exception:
         return -1.0
+
 
 def detect_network_drives() -> list[str]:
     drives = []

@@ -145,15 +145,18 @@ class ProbeParser:
             container=container,
         )
 
+
 def scan_dir(src: str) -> list[str]:
     import os
-    exts = {'.mkv', '.mp4', '.avi', '.mov', '.ts', '.m2ts', '.wmv', '.flv', '.mpg', '.mpeg'}
+
+    exts = {".mkv", ".mp4", ".avi", ".mov", ".ts", ".m2ts", ".wmv", ".flv", ".mpg", ".mpeg"}
     res = []
     for root, _, files in os.walk(src):
         for f in files:
             if os.path.splitext(f)[1].lower() in exts:
                 res.append(os.path.join(root, f))
     return res
+
 
 def probe_file(path: str) -> dict:
     parser = ProbeParser()
@@ -172,20 +175,23 @@ def probe_file(path: str) -> dict:
         "bitrate_kbps": mi.bitrate_kbps,
         "pix_fmt": mi.pix_fmt,
         "bitdepth": mi.bitdepth,
-        "path": path
+        "path": path,
     }
+
 
 def cp_probe_via_http(url: str, tmp_dir: str, password: str) -> dict:
     import json
     import urllib.parse
-    
+
     if password:
         url += f"?pw={urllib.parse.quote(password)}"
-        
+
     cmd = [
         "ffprobe",
-        "-v", "quiet",
-        "-print_format", "json",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
         "-show_streams",
         "-show_format",
         url,
@@ -197,7 +203,7 @@ def cp_probe_via_http(url: str, tmp_dir: str, password: str) -> dict:
         data = json.loads(stdout)
     except json.JSONDecodeError:
         return {"error_rc": -1, "error_msg": "JSON decode error"}
-        
+
     parser = ProbeParser()
     # Dummy Path since we just use it for name logic
     mi = parser._parse(data, Path("cp_http.mkv"))
@@ -205,12 +211,11 @@ def cp_probe_via_http(url: str, tmp_dir: str, password: str) -> dict:
         "codec": mi.video_codec,
         "width": mi.width,
         "height": mi.height,
-        "size": 0, # Size will be set by caller
+        "size": 0,  # Size will be set by caller
         "hdr": mi.hdr,
         "duration": mi.duration_seconds,
         "fps": mi.fps,
         "bitrate_kbps": mi.bitrate_kbps,
         "pix_fmt": mi.pix_fmt,
-        "bitdepth": mi.bitdepth
+        "bitdepth": mi.bitdepth,
     }
-

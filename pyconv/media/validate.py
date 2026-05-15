@@ -1,4 +1,4 @@
-﻿"""Output file validation helpers."""
+"""Output file validation helpers."""
 
 from __future__ import annotations
 import os
@@ -25,4 +25,3 @@ def validate_output(path: str, min_size: int = 1024 * 1024) -> bool:
     ]
     _, _, rc = run_cmd(cmd, timeout=15)
     return rc == 0
-

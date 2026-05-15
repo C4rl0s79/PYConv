@@ -76,7 +76,7 @@ class CopypartyClient:
         if password:
             self.password = password
         entries = self.list_directory(dir_url)
-        video_exts = {'.mkv', '.mp4', '.avi', '.mov', '.ts', '.m2ts', '.wmv', '.flv', '.mpg', '.mpeg'}
+        video_exts = {".mkv", ".mp4", ".avi", ".mov", ".ts", ".m2ts", ".wmv", ".flv", ".mpg", ".mpeg"}
         result = []
         for f in entries:
             if not isinstance(f, dict):
@@ -86,12 +86,14 @@ class CopypartyClient:
             ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
             if f".{ext}" in video_exts:
                 base = dir_url.rstrip("/")
-                result.append({
-                    "name": name,
-                    "path_url": f"{base}/{urllib.parse.quote(name)}",
-                    "dir_url": dir_url,
-                    "size": f.get("sz", 0),
-                })
+                result.append(
+                    {
+                        "name": name,
+                        "path_url": f"{base}/{urllib.parse.quote(name)}",
+                        "dir_url": dir_url,
+                        "size": f.get("sz", 0),
+                    }
+                )
         return result
 
     def set_cf_clearance(self, token: str) -> None:

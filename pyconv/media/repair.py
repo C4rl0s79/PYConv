@@ -1,4 +1,4 @@
-﻿"""RepairChain – orchestrates the full fallback repair sequence.
+"""RepairChain – orchestrates the full fallback repair sequence.
 
 Original fallback order (preserved 1:1):
   encoder_primary → encoder_sw_fallback → encoder_alt_sw → cpu_encoder
@@ -43,4 +43,3 @@ class RepairChain:
                 return fixed
             log.warning("[%s] FOURCC repair v%d FAILED", gpu_label, variant)
         return None
-
